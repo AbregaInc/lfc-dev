@@ -1,0 +1,22 @@
+name = "lfc-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+CORS_ORIGINS = "https://app.lfc.dev"
+
+# Secrets (set via `wrangler secret put`):
+#   JWT_SECRET
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lfc-db"
+database_id = "placeholder"  # Replace after `wrangler d1 create lfc-db`
+migrations_dir = "migrations"
+
+[env.production]
+routes = [{ pattern = "api.lfc.dev", custom_domain = true }]
+
+[env.production.vars]
+CORS_ORIGINS = "https://app.lfc.dev"

@@ -1,0 +1,20 @@
+{
+  "name": "@lfc/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "lfc": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "echo 'Use: pnpm lfc sync --dry-run'",
+    "lfc": "tsx src/index.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@lfc/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "lint": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply lfc-db --local",
+    "db:migrate": "wrangler d1 migrations apply lfc-db --remote",
+    "db:migrate:prod": "wrangler d1 migrations apply lfc-db --remote --env production"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "hono": "^4.6.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "@types/bcryptjs": "^2.4.6",
+    "typescript": "^5.7.3",
+    "wrangler": "^3.99.0"
+  }
+}

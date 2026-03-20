@@ -1,0 +1,22 @@
+{
+  "name": "lfc",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel --stream --filter @lfc/api --filter @lfc/dashboard dev",
+    "dev:all": "pnpm -r --parallel --stream --filter @lfc/api --filter @lfc/dashboard --filter @lfc/tray dev",
+    "dev:api": "pnpm --filter @lfc/api dev",
+    "dev:web": "pnpm --filter @lfc/dashboard dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  },
+  "packageManager": "pnpm@10.25.0+sha512.5e82639027af37cf832061bcc6d639c219634488e0f2baebe785028a793de7b525ffcd3f7ff574f5e9860654e098fe852ba8ac5dd5cefe1767d23a020a92f501"
+}
