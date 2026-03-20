@@ -20,3 +20,9 @@ routes = [{ pattern = "api.lfc.dev", custom_domain = true }]
 
 [env.production.vars]
 CORS_ORIGINS = "https://app.lfc.dev"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "lfc-db"
+database_id = "a15d80ea-de07-4cc3-9d5d-1cf19e29faef"
+migrations_dir = "migrations"
