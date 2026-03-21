@@ -3,16 +3,13 @@ import { AuthProvider, RequireAuth } from "./lib/auth";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
 import Profiles from "./pages/Profiles";
 import ProfileDetail from "./pages/ProfileDetail";
 import Secrets from "./pages/Secrets";
 import Suggestions from "./pages/Suggestions";
-import TeamStatus from "./pages/TeamStatus";
 import AuditLog from "./pages/AuditLog";
-import Users from "./pages/Users";
+import Team from "./pages/Team";
 import Join from "./pages/Join";
-import Inventory from "./pages/Inventory";
 import Settings from "./pages/Settings";
 import Landing from "./pages/Landing";
 
@@ -30,15 +27,13 @@ export default function App() {
             <RequireAuth>
               <Layout>
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/profiles" element={<Profiles />} />
+                  <Route path="/" element={<Profiles />} />
+                  <Route path="/profiles" element={<Navigate to="/app" />} />
                   <Route path="/profiles/:id" element={<ProfileDetail />} />
                   <Route path="/secrets" element={<Secrets />} />
                   <Route path="/suggestions" element={<Suggestions />} />
-                  <Route path="/status" element={<TeamStatus />} />
+                  <Route path="/team" element={<Team />} />
                   <Route path="/audit" element={<AuditLog />} />
-                  <Route path="/inventory" element={<Inventory />} />
-                  <Route path="/users" element={<Users />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/app" />} />
                 </Routes>

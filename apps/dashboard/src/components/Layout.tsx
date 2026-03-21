@@ -5,14 +5,11 @@ import type { ReactNode } from "react";
 import * as api from "../lib/api";
 
 const navItems = [
-  { to: "/app", label: "Overview", end: true },
-  { to: "/app/profiles", label: "Profiles" },
+  { to: "/app", label: "Profiles", end: true },
   { to: "/app/secrets", label: "Secrets" },
-  { to: "/app/inventory", label: "Inventory" },
+  { to: "/app/team", label: "Team" },
   { to: "/app/suggestions", label: "Suggestions", badgeKey: "suggestions" as const },
-  { to: "/app/status", label: "Team Status" },
   { to: "/app/audit", label: "Audit Log" },
-  { to: "/app/users", label: "Team" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {
