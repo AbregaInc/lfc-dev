@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const isDev = import.meta.env.DEV;
+  const [email, setEmail] = useState(isDev ? "admin@acme.com" : "");
+  const [password, setPassword] = useState(isDev ? "password123" : "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();

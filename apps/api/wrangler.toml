@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 CORS_ORIGINS = "http://localhost:5173,http://localhost:1420,http://127.0.0.1:5173,http://127.0.0.1:1420"
+DEV_SEED = "true"
 
 # Secrets (set via `wrangler secret put`):
 #   JWT_SECRET
