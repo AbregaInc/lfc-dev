@@ -500,20 +500,6 @@ export default function Landing() {
               <DownloadLinks />
             </Panel>
 
-            <Panel className="p-6">
-              <div className="text-[14px] font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
-                CLI
-              </div>
-              <p className="text-[13px] mb-3" style={{ color: "var(--color-text-tertiary)" }}>
-                For CI pipelines or if you prefer the command line.
-              </p>
-              <div
-                className="inline-block px-4 py-2 rounded-md font-mono text-[13px]"
-                style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
-              >
-                npm install -g lfc-cli
-              </div>
-            </Panel>
           </div>
         </Section>
 
