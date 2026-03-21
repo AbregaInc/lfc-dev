@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env node
 /**
  * LFC CLI — a Node.js sync client for testing the full flow without Tauri.
  *

@@ -1,20 +1,39 @@
 {
-  "name": "@lfc/cli",
+  "name": "lfc-cli",
   "version": "0.1.0",
-  "private": true,
+  "description": "LFC CLI — sync AI tool configs from your org",
   "type": "module",
   "bin": {
-    "lfc": "./src/index.ts"
+    "lfc": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "echo 'Use: pnpm lfc sync --dry-run'",
+    "build": "tsc",
     "lfc": "tsx src/index.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
-  "dependencies": {
-    "tsx": "^4.19.0"
+  "keywords": [
+    "lfc",
+    "config",
+    "ai",
+    "claude",
+    "cursor",
+    "mcp"
+  ],
+  "author": "Abrega Inc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AbregaInc/lfc-dev.git",
+    "directory": "apps/cli"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.3"
   }
 }
