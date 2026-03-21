@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../lib/auth";
 import * as api from "../lib/api";
 
@@ -12,6 +12,23 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Org settings (admin only)
+  const [orgName, setOrgName] = useState("");
+  const [orgSlug, setOrgSlug] = useState("");
+  const [orgLoaded, setOrgLoaded] = useState(false);
+
+  const isAdmin = user?.role === "admin";
+
+  useEffect(() => {
+    if (isAdmin && user?.orgId) {
+      api.getOrg(user.orgId).then((data) => {
+        setOrgName(data.org.name);
+        setOrgSlug(data.org.slug);
+        setOrgLoaded(true);
+      });
+    }
+  }, [isAdmin, user?.orgId]);
 
   const handleProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,11 +79,27 @@ export default function Settings() {
     }
   };
 
+  const handleOrg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.orgId) return;
+    setError("");
+    setSuccess("");
+    setSaving(true);
+    try {
+      await api.updateOrg(user.orgId, { name: orgName, slug: orgSlug });
+      setSuccess("Organization updated.");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-8">
         <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Update your profile and password</p>
+        <p className="page-subtitle">Manage your account{isAdmin ? " and organization" : ""}</p>
       </div>
 
       {error && (
@@ -97,7 +130,7 @@ export default function Settings() {
         </form>
       </div>
 
-      <div className="card p-5">
+      <div className="card p-5 mb-6">
         <div className="section-title mb-4">Change password</div>
         <form onSubmit={handlePassword} className="space-y-4 max-w-[400px]">
           <div>
@@ -117,6 +150,40 @@ export default function Settings() {
           </button>
         </form>
       </div>
+
+      {/* Org settings — admin only */}
+      {isAdmin && orgLoaded && (
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="section-title">Organization</div>
+            <span
+              className="badge"
+              style={{ background: "#faf5ff", color: "#7c3aed" }}
+            >
+              admin
+            </span>
+          </div>
+          <form onSubmit={handleOrg} className="space-y-4 max-w-[400px]">
+            <div>
+              <label className="label">Organization name</label>
+              <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} className="input-base" required />
+            </div>
+            <div>
+              <label className="label">URL slug</label>
+              <input
+                type="text"
+                value={orgSlug}
+                onChange={(e) => setOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                className="input-base font-mono"
+                required
+              />
+            </div>
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? "Saving..." : "Save organization"}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

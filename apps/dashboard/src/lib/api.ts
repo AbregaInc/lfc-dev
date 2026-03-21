@@ -82,6 +82,13 @@ export async function getOrg(orgId: string) {
   return request<{ org: any }>(`/api/orgs/${orgId}`);
 }
 
+export async function updateOrg(orgId: string, data: { name?: string; slug?: string }) {
+  return request<{ org: any }>(`/api/orgs/${orgId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 // ─── Profiles ────────────────────────────────────────────────────────
 
 export async function listProfiles(orgId: string) {
