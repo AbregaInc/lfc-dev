@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ToolScan } from "./Onboarding";
 
 const TOOL_LABELS: Record<string, string> = {
@@ -19,43 +20,47 @@ function toolConfigSummary(scan: ToolScan): string {
   const parts: string[] = [];
   const managedMcp = scan.mcpServers.filter((s) => s.managed).length;
   const totalMcp = scan.mcpServers.length;
-  if (totalMcp > 0) parts.push(`${totalMcp} MCP server${totalMcp !== 1 ? "s" : ""}${managedMcp > 0 ? ` (${managedMcp} managed)` : ""}`);
-  const managedSkills = scan.skills.filter((s) => s.managed).length;
+  if (totalMcp > 0) parts.push(`${totalMcp} MCP${managedMcp > 0 ? ` (${managedMcp} managed)` : ""}`);
   const totalSkills = scan.skills.length;
-  if (totalSkills > 0) parts.push(`${totalSkills} skill${totalSkills !== 1 ? "s" : ""}${managedSkills > 0 ? ` (${managedSkills} managed)` : ""}`);
-  const managedRules = scan.rules.filter((s) => s.managed).length;
+  if (totalSkills > 0) parts.push(`${totalSkills} skill${totalSkills !== 1 ? "s" : ""}`);
   const totalRules = scan.rules.length;
-  if (totalRules > 0) parts.push(`${totalRules} rule${totalRules !== 1 ? "s" : ""}${managedRules > 0 ? ` (${managedRules} managed)` : ""}`);
+  if (totalRules > 0) parts.push(`${totalRules} rule${totalRules !== 1 ? "s" : ""}`);
   return parts.length > 0 ? parts.join(", ") : "No configs";
 }
+
+const INTERVAL_LABELS: Record<number, string> = {
+  30: "30s",
+  60: "1m",
+  300: "5m",
+  900: "15m",
+};
 
 export default function Status({
   email,
   syncStatus,
   syncError,
   lastSync,
-  installedTools,
   syncedConfigs,
+  syncInterval,
   toolScans,
   onSyncNow,
   onRescan,
-  onSettings,
-  onSuggest,
+  onSaveSyncInterval,
   onLogout,
 }: {
   email: string;
   syncStatus: string;
   syncError?: string;
   lastSync?: string;
-  installedTools: string[];
   syncedConfigs: number;
+  syncInterval: number;
   toolScans: ToolScan[];
   onSyncNow: () => void;
   onRescan: () => void;
-  onSettings: () => void;
-  onSuggest: () => void;
+  onSaveSyncInterval: (interval: number) => void;
   onLogout: () => void;
 }) {
+  const [showSettings, setShowSettings] = useState(false);
   const isConnected = syncStatus !== "error";
   const isSyncing = syncStatus === "syncing";
   const isSynced = syncStatus === "synced";
@@ -152,26 +157,36 @@ export default function Status({
                 </div>
               ))}
             </div>
-          ) : installedTools.length > 0 ? (
-            <div className="space-y-1.5">
-              {installedTools.map((tool) => (
-                <div key={tool} className="flex items-center gap-2">
-                  <span
-                    className="w-[5px] h-[5px] rounded-full shrink-0"
-                    style={{ background: "var(--color-success)" }}
-                  />
-                  <span className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
-                    {TOOL_LABELS[tool] || tool}
-                  </span>
-                </div>
-              ))}
-            </div>
           ) : (
             <div className="text-[12px]" style={{ color: "var(--color-text-tertiary)" }}>
-              Click "Rescan" to detect installed tools.
+              No tools detected yet.
             </div>
           )}
         </div>
+
+        {/* Inline settings */}
+        {showSettings && (
+          <div className="card p-3.5">
+            <div className="section-title mb-2">Sync interval</div>
+            <div className="flex gap-1.5">
+              {[30, 60, 300, 900].map((val) => (
+                <button
+                  key={val}
+                  onClick={() => onSaveSyncInterval(val)}
+                  className="flex-1 py-1.5 rounded-md text-[11px] font-medium"
+                  style={{
+                    background: syncInterval === val ? "var(--color-text-primary)" : "var(--color-surface)",
+                    color: syncInterval === val ? "var(--color-text-inverse)" : "var(--color-text-tertiary)",
+                    border: syncInterval === val ? "none" : "1px solid var(--color-border)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {INTERVAL_LABELS[val]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -179,10 +194,12 @@ export default function Status({
         className="px-4 py-2.5 flex items-center justify-between shrink-0"
         style={{ borderTop: "1px solid var(--color-border)" }}
       >
-        <div className="flex items-center gap-1">
-          <button onClick={onSettings} className="btn-ghost">Settings</button>
-          <button onClick={onSuggest} className="btn-ghost">Suggest</button>
-        </div>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="btn-ghost"
+        >
+          {showSettings ? "Hide settings" : "Settings"}
+        </button>
         <button
           onClick={onLogout}
           className="btn-ghost"
