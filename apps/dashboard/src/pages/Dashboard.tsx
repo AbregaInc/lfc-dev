@@ -182,6 +182,8 @@ export default function Dashboard() {
     { label: "Secrets", value: stats.secrets, to: "/app/secrets" },
   ];
 
+  const GITHUB_RELEASE = "https://github.com/AbregaInc/lfc-dev/releases/latest";
+
   return (
     <div>
       <div className="mb-8">
@@ -200,6 +202,43 @@ export default function Dashboard() {
             </div>
           </Link>
         ))}
+      </div>
+
+      {/* Download / connect prompt */}
+      <div className="card p-5 mb-6">
+        <div className="section-title mb-1">Connect the desktop app</div>
+        <p className="text-[13px] mb-4" style={{ color: "var(--color-text-tertiary)" }}>
+          Download and sign in with your account to start syncing configs automatically.
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <a
+            href={GITHUB_RELEASE}
+            className="btn-primary text-[13px]"
+            style={{ textDecoration: "none" }}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download for macOS
+          </a>
+          <a
+            href={GITHUB_RELEASE}
+            className="btn-secondary text-[13px]"
+            style={{ textDecoration: "none" }}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Download for Windows
+          </a>
+          <span className="text-[12px]" style={{ color: "var(--color-text-tertiary)" }}>
+            or install via CLI:
+          </span>
+          <code
+            className="text-[12px] px-2 py-1 rounded"
+            style={{ background: "var(--color-surface-sunken)", color: "var(--color-text-secondary)" }}
+          >
+            npm i -g lfc-cli
+          </code>
+        </div>
       </div>
 
       <div className="card p-5">

@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8787";
 
 function getToken(): string | null {
   return localStorage.getItem("lfc_token");
@@ -60,6 +60,13 @@ export async function register(name: string, email: string, password: string) {
 
 export async function getMe() {
   return request<{ user: any }>("/api/auth/me");
+}
+
+export async function updateMe(data: { name?: string; email?: string; currentPassword?: string; newPassword?: string }) {
+  return request<{ user: any }>("/api/auth/me", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }
 
 // ─── Orgs ────────────────────────────────────────────────────────────

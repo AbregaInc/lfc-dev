@@ -89,13 +89,23 @@ export default function Layout({ children }: { children: ReactNode }) {
           <div className="text-[12px] truncate" style={{ color: "var(--color-text-secondary)" }}>
             {user?.email}
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-[11px] cursor-pointer border-none bg-transparent p-0 mt-0.5"
-            style={{ color: "var(--color-text-tertiary)" }}
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-2 mt-0.5">
+            <NavLink
+              to="/app/settings"
+              className="text-[11px]"
+              style={{ color: "var(--color-text-tertiary)", textDecoration: "none" }}
+            >
+              Settings
+            </NavLink>
+            <span className="text-[11px]" style={{ color: "var(--color-border)" }}>·</span>
+            <button
+              onClick={handleLogout}
+              className="text-[11px] cursor-pointer border-none bg-transparent p-0"
+              style={{ color: "var(--color-text-tertiary)" }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 
