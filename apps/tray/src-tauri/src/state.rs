@@ -20,7 +20,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            api_url: "http://localhost:3001".to_string(),
+            api_url: "https://api.lfc.dev".to_string(),
             auth_token: None,
             email: None,
             org_id: None,

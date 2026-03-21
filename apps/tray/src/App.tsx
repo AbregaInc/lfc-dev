@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_URL } from "./config";
 import Login from "./pages/Login";
 import Status from "./pages/Status";
 import Settings from "./pages/Settings";
@@ -53,7 +54,7 @@ function getStored() {
   return {
     token: localStorage.getItem("lfc_tray_token"),
     email: localStorage.getItem("lfc_tray_email") || "",
-    apiUrl: localStorage.getItem("lfc_tray_api_url") || "http://localhost:3001",
+    apiUrl: API_URL,
     orgId: localStorage.getItem("lfc_tray_org_id") || "",
   };
 }
@@ -74,7 +75,7 @@ export default function App() {
   const [page, setPage] = useState<Page>("login");
   const [state, setState] = useState<AppState>({
     loggedIn: false,
-    apiUrl: "http://localhost:3001",
+    apiUrl: API_URL,
     syncInterval: 30,
     syncStatus: "idle",
     installedTools: [],
@@ -126,7 +127,6 @@ export default function App() {
     if (!res.ok) throw new Error(data.error || "Login failed");
     localStorage.setItem("lfc_tray_token", data.token);
     localStorage.setItem("lfc_tray_email", email);
-    localStorage.setItem("lfc_tray_api_url", apiUrl);
     localStorage.setItem("lfc_tray_org_id", data.user.orgId);
     setState((s) => ({ ...s, loggedIn: true, email, apiUrl }));
     const hasLastSync = !!localStorage.getItem("lfc_tray_last_sync");
@@ -139,7 +139,6 @@ export default function App() {
     } else {
       localStorage.removeItem("lfc_tray_token");
       localStorage.removeItem("lfc_tray_email");
-      localStorage.removeItem("lfc_tray_api_url");
       localStorage.removeItem("lfc_tray_org_id");
     }
     setState((s) => ({ ...s, loggedIn: false, email: undefined, syncStatus: "idle", syncError: undefined, installedTools: [], syncedConfigs: 0 }));
@@ -290,7 +289,7 @@ export default function App() {
   // ─── Render ─────────────────────────────────────────────────────────
 
   if (page === "login") {
-    return <Login apiUrl={state.apiUrl} onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} />;
   }
 
   if (page === "onboarding") {
@@ -308,7 +307,6 @@ export default function App() {
   if (page === "settings") {
     return (
       <Settings
-        apiUrl={state.apiUrl}
         syncInterval={state.syncInterval}
         onSave={handleSaveSettings}
         onBack={() => setPage("status")}
