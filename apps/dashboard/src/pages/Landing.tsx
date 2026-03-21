@@ -97,6 +97,57 @@ function Section({
   );
 }
 
+// ─── Download links ─────────────────────────────────────────────────
+
+const GITHUB_RELEASE = "https://github.com/AbregaInc/lfc-dev/releases/latest";
+
+function DownloadLinks({ size = "default" }: { size?: "small" | "default" }) {
+  const isSmall = size === "small";
+  return (
+    <div className={`flex items-center justify-center gap-${isSmall ? "2" : "3"} flex-wrap`}>
+      <a
+        href={GITHUB_RELEASE}
+        className={`text-[${isSmall ? "11px" : "13px"}] font-medium px-${isSmall ? "3" : "4"} py-${isSmall ? "1" : "2"} rounded-md`}
+        style={{
+          border: "1px solid var(--color-border)",
+          color: "var(--color-text-secondary)",
+          textDecoration: "none",
+        }}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        macOS (Apple Silicon)
+      </a>
+      <a
+        href={GITHUB_RELEASE}
+        className={`text-[${isSmall ? "11px" : "13px"}] font-medium px-${isSmall ? "3" : "4"} py-${isSmall ? "1" : "2"} rounded-md`}
+        style={{
+          border: "1px solid var(--color-border)",
+          color: "var(--color-text-secondary)",
+          textDecoration: "none",
+        }}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        macOS (Intel)
+      </a>
+      <a
+        href={GITHUB_RELEASE}
+        className={`text-[${isSmall ? "11px" : "13px"}] font-medium px-${isSmall ? "3" : "4"} py-${isSmall ? "1" : "2"} rounded-md`}
+        style={{
+          border: "1px solid var(--color-border)",
+          color: "var(--color-text-secondary)",
+          textDecoration: "none",
+        }}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Windows
+      </a>
+    </div>
+  );
+}
+
 // ─── Landing ────────────────────────────────────────────────────────
 
 export default function Landing() {
@@ -106,6 +157,7 @@ export default function Landing() {
       <nav className="flex items-center justify-between px-6 py-4 mx-auto" style={{ maxWidth: "880px" }}>
         <span className="text-[14px] font-bold" style={{ color: "var(--color-accent)" }}>LFC</span>
         <div className="flex items-center gap-4">
+          <a href="#download" className="text-[13px]" style={{ color: "var(--color-text-tertiary)", textDecoration: "none" }}>Download</a>
           <a href="#pricing" className="text-[13px]" style={{ color: "var(--color-text-tertiary)", textDecoration: "none" }}>Pricing</a>
           <Link to="/login" className="text-[13px]" style={{ color: "var(--color-text-secondary)", textDecoration: "none" }}>Sign in</Link>
           <Link
@@ -182,7 +234,8 @@ export default function Landing() {
               n: "2",
               title: "Install the app",
               desc: "Team members download the LFC tray app. Mac and Windows supported.",
-              detail: "5 MB download",
+              detail: null,
+              downloads: true,
             },
             {
               n: "3",
@@ -190,7 +243,7 @@ export default function Landing() {
               desc: "Configs sync automatically. Tools are configured. No manual setup ever again.",
               detail: "Syncs every 5 min",
             },
-          ].map((step, i) => (
+          ].map((step) => (
             <div key={step.n} className="flex-1 text-center">
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold mx-auto mb-3"
@@ -204,9 +257,13 @@ export default function Landing() {
               <p className="text-[13px] leading-relaxed mb-2" style={{ color: "var(--color-text-tertiary)" }}>
                 {step.desc}
               </p>
-              <span className="text-[11px] font-medium" style={{ color: "var(--color-text-tertiary)" }}>
-                {step.detail}
-              </span>
+              {"downloads" in step && step.downloads ? (
+                <DownloadLinks size="small" />
+              ) : (
+                <span className="text-[11px] font-medium" style={{ color: "var(--color-text-tertiary)" }}>
+                  {step.detail}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -424,6 +481,40 @@ export default function Landing() {
               ))}
             </div>
           </Panel>
+        </Section>
+
+        {/* ── Download ─────────────────────────────────────────── */}
+        <Section
+          id="download"
+          title="Download LFC"
+          text="Install the tray app to sync configs automatically. Or use the CLI if you prefer the terminal."
+        >
+          <div className="space-y-4">
+            <Panel className="p-6">
+              <div className="text-[14px] font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+                Desktop app
+              </div>
+              <p className="text-[13px] mb-4" style={{ color: "var(--color-text-tertiary)" }}>
+                System tray app for macOS and Windows. Syncs in the background every 5 minutes.
+              </p>
+              <DownloadLinks />
+            </Panel>
+
+            <Panel className="p-6">
+              <div className="text-[14px] font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>
+                CLI
+              </div>
+              <p className="text-[13px] mb-3" style={{ color: "var(--color-text-tertiary)" }}>
+                For CI pipelines or if you prefer the command line.
+              </p>
+              <div
+                className="inline-block px-4 py-2 rounded-md font-mono text-[13px]"
+                style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
+              >
+                npm install -g lfc-cli
+              </div>
+            </Panel>
+          </div>
         </Section>
 
         {/* ── Pricing ──────────────────────────────────────────── */}

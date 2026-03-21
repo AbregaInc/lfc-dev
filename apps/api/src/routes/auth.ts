@@ -100,4 +100,64 @@ auth.get("/me", authMiddleware, (c) => {
   return c.json({ user });
 });
 
+auth.put("/me", authMiddleware, async (c) => {
+  const db = c.env.DB;
+  const user = getUser(c);
+  const { name, email, currentPassword, newPassword } = await c.req.json();
+
+  if (!name && !email && !newPassword) {
+    return c.json({ error: "Nothing to update" }, 400);
+  }
+
+  const existing = await db
+    .prepare("SELECT id, email, password_hash, name FROM users WHERE id = ?")
+    .bind(user.id)
+    .first<{ id: string; email: string; password_hash: string; name: string }>();
+
+  if (!existing) {
+    return c.json({ error: "User not found" }, 404);
+  }
+
+  if (newPassword) {
+    if (!currentPassword) {
+      return c.json({ error: "Current password is required to set a new password" }, 400);
+    }
+    if (!(await bcrypt.compare(currentPassword, existing.password_hash))) {
+      return c.json({ error: "Current password is incorrect" }, 401);
+    }
+  }
+
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if (name) {
+    updates.push("name = ?");
+    values.push(name);
+  }
+  if (email) {
+    const emailTaken = await db.prepare("SELECT id FROM users WHERE email = ? AND id != ?").bind(email, user.id).first();
+    if (emailTaken) {
+      return c.json({ error: "Email already in use" }, 409);
+    }
+    updates.push("email = ?");
+    values.push(email);
+  }
+  if (newPassword) {
+    updates.push("password_hash = ?");
+    values.push(await bcrypt.hash(newPassword, 10));
+  }
+
+  if (updates.length > 0) {
+    values.push(user.id);
+    await db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+  }
+
+  const updated = await db
+    .prepare("SELECT id, email, name, org_id as orgId, role FROM users WHERE id = ?")
+    .bind(user.id)
+    .first();
+
+  return c.json({ user: updated });
+});
+
 export default auth;

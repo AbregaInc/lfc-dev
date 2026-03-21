@@ -14,6 +14,7 @@ import Users from "./pages/Users";
 import Invite from "./pages/Invite";
 import Join from "./pages/Join";
 import Inventory from "./pages/Inventory";
+import Settings from "./pages/Settings";
 import Landing from "./pages/Landing";
 
 export default function App() {
@@ -40,6 +41,7 @@ export default function App() {
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/users" element={<Users />} />
                   <Route path="/invite" element={<Invite />} />
+                  <Route path="/settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/app" />} />
                 </Routes>
               </Layout>
