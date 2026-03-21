@@ -236,7 +236,7 @@ export default function Dashboard() {
         <div className="section-title mb-4">Quick actions</div>
         <div className="flex gap-3">
           <Link to="/app/profiles" className="btn-primary">Manage profiles</Link>
-          <Link to="/app/invite" className="btn-secondary">Invite users</Link>
+          <Link to="/app/users" className="btn-secondary">Invite team</Link>
           <Link to="/app/secrets" className="btn-secondary">Manage secrets</Link>
         </div>
       </div>

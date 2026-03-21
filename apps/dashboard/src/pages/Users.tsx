@@ -5,12 +5,39 @@ import * as api from "../lib/api";
 export default function Users() {
   const { user } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   useEffect(() => {
     if (user?.orgId) {
       api.listUsers(user.orgId).then((data) => setUsers(data.users));
     }
   }, [user]);
+
+  const generateInvite = async () => {
+    if (!user?.orgId) return;
+    setInviteLoading(true);
+    try {
+      const data = await api.createInvite(user.orgId);
+      setInviteCode(data.invite.code);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const inviteUrl = inviteCode ? `${window.location.origin}/join/${inviteCode}` : null;
+
+  const copyToClipboard = async () => {
+    if (!inviteUrl) return;
+    await navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const isAdmin = user?.role === "admin";
 
   return (
     <div>
@@ -19,6 +46,40 @@ export default function Users() {
         <p className="page-subtitle">Members of your organization</p>
       </div>
 
+      {/* Invite section — admin only */}
+      {isAdmin && (
+        <div className="card p-5 mb-6">
+          <div className="section-title mb-1">Invite members</div>
+          <p className="text-[13px] mb-4" style={{ color: "var(--color-text-tertiary)" }}>
+            Generate a link to share with your team.
+          </p>
+          <button onClick={generateInvite} disabled={inviteLoading} className="btn-primary">
+            {inviteLoading ? "Generating..." : "Generate invite link"}
+          </button>
+
+          {inviteUrl && (
+            <div className="mt-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inviteUrl}
+                  readOnly
+                  className="input-base font-mono text-[12px]"
+                  style={{ background: "var(--color-surface-sunken)" }}
+                />
+                <button onClick={copyToClipboard} className="btn-primary shrink-0">
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <p className="text-[12px] mt-2" style={{ color: "var(--color-text-tertiary)" }}>
+                Share this link. Recipients will create an account and join your org.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Members table */}
       <div className="card overflow-hidden">
         {users.length === 0 ? (
           <div className="p-12 text-center text-[14px]" style={{ color: "var(--color-text-tertiary)" }}>No users yet.</div>

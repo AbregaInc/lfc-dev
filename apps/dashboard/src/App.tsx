@@ -11,7 +11,6 @@ import Suggestions from "./pages/Suggestions";
 import TeamStatus from "./pages/TeamStatus";
 import AuditLog from "./pages/AuditLog";
 import Users from "./pages/Users";
-import Invite from "./pages/Invite";
 import Join from "./pages/Join";
 import Inventory from "./pages/Inventory";
 import Settings from "./pages/Settings";
@@ -40,7 +39,6 @@ export default function App() {
                   <Route path="/audit" element={<AuditLog />} />
                   <Route path="/inventory" element={<Inventory />} />
                   <Route path="/users" element={<Users />} />
-                  <Route path="/invite" element={<Invite />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/app" />} />
                 </Routes>

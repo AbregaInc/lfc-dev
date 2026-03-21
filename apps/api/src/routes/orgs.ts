@@ -29,6 +29,43 @@ orgs.post("/", async (c) => {
   return c.json({ org: { id: orgId, name, slug } });
 });
 
+orgs.put("/:orgId", async (c) => {
+  const db = c.env.DB;
+  const { orgId } = c.req.param();
+  const user = getUser(c);
+
+  if (user.orgId !== orgId || user.role !== "admin") {
+    return c.json({ error: "Only org admins can update organization settings" }, 403);
+  }
+
+  const { name, slug } = await c.req.json();
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if (name) {
+    updates.push("name = ?");
+    values.push(name);
+  }
+  if (slug) {
+    const existing = await db.prepare("SELECT id FROM orgs WHERE slug = ? AND id != ?").bind(slug, orgId).first();
+    if (existing) {
+      return c.json({ error: "Slug already taken" }, 409);
+    }
+    updates.push("slug = ?");
+    values.push(slug);
+  }
+
+  if (updates.length === 0) {
+    return c.json({ error: "Nothing to update" }, 400);
+  }
+
+  values.push(orgId);
+  await db.prepare(`UPDATE orgs SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run();
+
+  const org = await db.prepare("SELECT id, name, slug, created_at as createdAt FROM orgs WHERE id = ?").bind(orgId).first();
+  return c.json({ org });
+});
+
 orgs.get("/:orgId", async (c) => {
   const db = c.env.DB;
   const { orgId } = c.req.param();

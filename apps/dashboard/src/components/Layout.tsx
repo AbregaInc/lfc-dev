@@ -13,7 +13,6 @@ const navItems = [
   { to: "/app/status", label: "Team Status" },
   { to: "/app/audit", label: "Audit Log" },
   { to: "/app/users", label: "Team" },
-  { to: "/app/invite", label: "Invite" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {
