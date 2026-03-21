@@ -6,6 +6,9 @@ import Onboarding, { type ToolScan } from "./pages/Onboarding";
 
 type Page = "login" | "status" | "onboarding";
 
+type ConfigItem = { type: "mcp"; name: string; command: string; args: string[]; managed: boolean }
+  | { type: "skill" | "rule" | "agent"; name: string; managed: boolean; preview: string };
+
 interface AppState {
   loggedIn: boolean;
   email?: string;
@@ -49,12 +52,14 @@ export default function App() {
   const [state, setState] = useState<AppState>({
     loggedIn: false,
     apiUrl: API_URL,
-    syncInterval: 300,
+    syncInterval: 7200,
     syncStatus: "idle",
     installedTools: [],
     syncedConfigs: 0,
   });
   const [toolScans, setToolScans] = useState<ToolScan[]>([]);
+  const [suggestedItems, setSuggestedItems] = useState<Set<string>>(new Set());
+  const [defaultProfileId, setDefaultProfileId] = useState<string | null>(null);
 
   useEffect(() => { loadStatus(); }, []);
 
@@ -83,10 +88,25 @@ export default function App() {
     }
   };
 
+  const loadDefaultProfile = async () => {
+    try {
+      const { orgId } = getStored();
+      if (!orgId) return;
+      const data = await apiFetch(`/api/orgs/${orgId}/profiles`);
+      const profiles = data.profiles || [];
+      if (profiles.length > 0) {
+        setDefaultProfileId(profiles[0].id);
+      }
+    } catch (e) {
+      console.warn("[LFC] Failed to load profiles:", e);
+    }
+  };
+
   const handleLogin = async (apiUrl: string, email: string, password: string) => {
     if (isTauri) {
       await tauriInvoke("login", { apiUrl, email, password });
       await loadStatus();
+      await loadDefaultProfile();
       return;
     }
     const res = await fetch(`${apiUrl}/api/auth/login`, {
@@ -100,6 +120,7 @@ export default function App() {
     localStorage.setItem("lfc_tray_email", email);
     localStorage.setItem("lfc_tray_org_id", data.user.orgId);
     setState((s) => ({ ...s, loggedIn: true, email, apiUrl }));
+    await loadDefaultProfile();
     setPage("onboarding");
   };
 
@@ -187,6 +208,60 @@ export default function App() {
     }
   };
 
+  const buildSuggestionContent = (item: ConfigItem): { configType: string; title: string; content: string } => {
+    if (item.type === "mcp") {
+      return {
+        configType: "mcp",
+        title: `Add ${item.name} MCP server`,
+        content: JSON.stringify({ servers: [{ name: item.name, command: item.command, args: item.args, env: {}, _managed_by: "lfc" }] }),
+      };
+    }
+    return {
+      configType: item.type === "skill" ? "skills" : item.type === "agent" ? "agents" : "rules",
+      title: `Add ${item.name} ${item.type}`,
+      content: JSON.stringify({ name: item.name, content: item.preview || "" }),
+    };
+  };
+
+  const handleSuggest = async (toolId: string, item: ConfigItem) => {
+    const { orgId } = getStored();
+    if (!orgId || !defaultProfileId) return;
+    const { configType, title, content } = buildSuggestionContent(item);
+
+    if (isTauri) {
+      try {
+        await tauriInvoke("submit_suggestion", { profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` });
+      } catch (e) {
+        console.warn("[LFC] Tauri submit_suggestion failed, falling back to API:", e);
+        await apiFetch(`/api/orgs/${orgId}/suggestions`, {
+          method: "POST",
+          body: JSON.stringify({ profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` }),
+        });
+      }
+    } else {
+      await apiFetch(`/api/orgs/${orgId}/suggestions`, {
+        method: "POST",
+        body: JSON.stringify({ profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` }),
+      });
+    }
+
+    const key = `${toolId}:${item.type}:${item.name}`;
+    setSuggestedItems((prev) => new Set(prev).add(key));
+  };
+
+  const handleSuggestAll = async (toolId: string, items: ConfigItem[]) => {
+    for (const item of items) {
+      await handleSuggest(toolId, item);
+    }
+  };
+
+  // Load default profile on mount if already logged in
+  useEffect(() => {
+    if (state.loggedIn && !defaultProfileId) {
+      loadDefaultProfile();
+    }
+  }, [state.loggedIn]);
+
   if (page === "login") {
     return <Login onLogin={handleLogin} />;
   }
@@ -211,8 +286,11 @@ export default function App() {
       syncedConfigs={state.syncedConfigs}
       syncInterval={state.syncInterval}
       toolScans={toolScans}
+      suggestedItems={suggestedItems}
       onSyncNow={handleSyncNow}
       onRescan={handleScanTools}
+      onSuggest={handleSuggest}
+      onSuggestAll={handleSuggestAll}
       onSaveSyncInterval={handleSaveSyncInterval}
       onLogout={handleLogout}
     />

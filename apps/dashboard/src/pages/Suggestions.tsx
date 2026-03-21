@@ -34,8 +34,7 @@ export default function Suggestions() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyNote, setDenyNote] = useState("");
-  const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState("");
+  const [editedContent, setEditedContent] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -59,22 +58,14 @@ export default function Suggestions() {
     }
   };
 
+  const getContent = (s: any): string => editedContent[s.id] ?? s.content ?? "";
+
   const handleApprove = async (suggestion: any) => {
-    if (approvingId === suggestion.id) {
-      // Submit the approval with edited content
-      if (!user?.orgId) return;
-      try {
-        await api.approveSuggestion(user.orgId, suggestion.id, { content: editContent });
-        setApprovingId(null);
-        setEditContent("");
-        loadSuggestions();
-      } catch {}
-    } else {
-      // Open the edit view
-      setApprovingId(suggestion.id);
-      setEditContent(suggestion.content || "");
-      setDenyingId(null);
-    }
+    if (!user?.orgId) return;
+    try {
+      await api.approveSuggestion(user.orgId, suggestion.id, { content: getContent(suggestion) });
+      loadSuggestions();
+    } catch {}
   };
 
   const handleDeny = async (suggestionId: string) => {
@@ -215,13 +206,13 @@ export default function Suggestions() {
                         </p>
                       )}
 
-                      {/* Proposed content */}
+                      {/* Proposed content: editable for pending, read-only otherwise */}
                       <div className="mb-4">
                         <div className="section-title mb-2">Proposed content</div>
-                        {approvingId === s.id ? (
+                        {s.status === "pending" ? (
                           <textarea
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
+                            value={getContent(s)}
+                            onChange={(e) => setEditedContent((prev) => ({ ...prev, [s.id]: e.target.value }))}
                             className="input-base font-mono resize-y"
                             style={{ minHeight: "160px", fontSize: "12px", lineHeight: "1.6" }}
                           />
@@ -262,54 +253,39 @@ export default function Suggestions() {
                         </div>
                       )}
 
-                      {/* Deny reason input */}
-                      {denyingId === s.id && (
-                        <div className="mb-4">
-                          <label className="label">Reason for denial</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={denyNote}
-                              onChange={(e) => setDenyNote(e.target.value)}
-                              placeholder="Optional reason..."
-                              className="input-base flex-1"
-                              autoFocus
-                            />
-                            <button onClick={() => handleDeny(s.id)} className="btn-primary">
-                              Confirm deny
-                            </button>
-                            <button onClick={() => { setDenyingId(null); setDenyNote(""); }} className="btn-secondary">
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
                       {/* Actions for pending */}
-                      {s.status === "pending" && denyingId !== s.id && (
-                        <div className="flex gap-2 pt-1">
-                          <button
-                            onClick={() => handleApprove(s)}
-                            className="btn-primary"
-                          >
-                            {approvingId === s.id ? "Confirm approval" : "Approve"}
-                          </button>
-                          {approvingId === s.id && (
-                            <button
-                              onClick={() => { setApprovingId(null); setEditContent(""); }}
-                              className="btn-secondary"
-                            >
-                              Cancel edit
+                      {s.status === "pending" && (
+                        <div>
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={() => handleApprove(s)} className="btn-primary">
+                              Approve
                             </button>
-                          )}
-                          {approvingId !== s.id && (
                             <button
-                              onClick={() => { setDenyingId(s.id); setDenyNote(""); setApprovingId(null); }}
+                              onClick={() => {
+                                if (denyingId === s.id) { setDenyingId(null); setDenyNote(""); }
+                                else { setDenyingId(s.id); setDenyNote(""); }
+                              }}
                               className="btn-secondary"
                               style={{ color: "var(--color-danger)" }}
                             >
                               Deny
                             </button>
+                          </div>
+                          {denyingId === s.id && (
+                            <div className="flex gap-2 mt-3">
+                              <input
+                                type="text"
+                                value={denyNote}
+                                onChange={(e) => setDenyNote(e.target.value)}
+                                placeholder="Optional reason..."
+                                className="input-base flex-1"
+                                autoFocus
+                                onKeyDown={(e) => { if (e.key === "Enter") handleDeny(s.id); }}
+                              />
+                              <button onClick={() => handleDeny(s.id)} className="btn-primary">
+                                Confirm deny
+                              </button>
+                            </div>
                           )}
                         </div>
                       )}
