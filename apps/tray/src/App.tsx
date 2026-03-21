@@ -2,11 +2,9 @@ import { useState, useEffect } from "react";
 import { API_URL } from "./config";
 import Login from "./pages/Login";
 import Status from "./pages/Status";
-import Settings from "./pages/Settings";
-import Suggest from "./pages/Suggest";
 import Onboarding, { type ToolScan } from "./pages/Onboarding";
 
-type Page = "login" | "status" | "settings" | "suggest" | "onboarding";
+type Page = "login" | "status" | "onboarding";
 
 interface AppState {
   loggedIn: boolean;
@@ -20,35 +18,12 @@ interface AppState {
   syncedConfigs: number;
 }
 
-interface LocalConfig {
-  configType: string;
-  name: string;
-  preview: string;
-  content: string;
-}
-
-interface Suggestion {
-  id: string;
-  title: string;
-  configType: string;
-  status: string;
-  createdAt: string;
-}
-
-interface Profile {
-  id: string;
-  name: string;
-}
-
-// Detect if we're running inside Tauri
 const isTauri = !!(window as any).__TAURI__;
 
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/tauri");
   return invoke<T>(cmd, args);
 }
-
-// ─── Browser-mode API helper ─────────────────────────────────────────
 
 function getStored() {
   return {
@@ -69,14 +44,12 @@ async function apiFetch(path: string, opts: RequestInit = {}) {
   return data;
 }
 
-// ─── App ─────────────────────────────────────────────────────────────
-
 export default function App() {
   const [page, setPage] = useState<Page>("login");
   const [state, setState] = useState<AppState>({
     loggedIn: false,
     apiUrl: API_URL,
-    syncInterval: 30,
+    syncInterval: 300,
     syncStatus: "idle",
     installedTools: [],
     syncedConfigs: 0,
@@ -102,7 +75,6 @@ export default function App() {
         console.error("[LFC] get_status failed:", e);
       }
     }
-    // Browser fallback
     const { token, email, apiUrl } = getStored();
     if (token) {
       setState((s) => ({ ...s, loggedIn: true, email, apiUrl }));
@@ -117,7 +89,6 @@ export default function App() {
       await loadStatus();
       return;
     }
-    // Browser fallback
     const res = await fetch(`${apiUrl}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -129,8 +100,7 @@ export default function App() {
     localStorage.setItem("lfc_tray_email", email);
     localStorage.setItem("lfc_tray_org_id", data.user.orgId);
     setState((s) => ({ ...s, loggedIn: true, email, apiUrl }));
-    const hasLastSync = !!localStorage.getItem("lfc_tray_last_sync");
-    setPage(hasLastSync ? "status" : "onboarding");
+    setPage("onboarding");
   };
 
   const handleLogout = async () => {
@@ -140,8 +110,10 @@ export default function App() {
       localStorage.removeItem("lfc_tray_token");
       localStorage.removeItem("lfc_tray_email");
       localStorage.removeItem("lfc_tray_org_id");
+      localStorage.removeItem("lfc_tray_last_sync");
     }
     setState((s) => ({ ...s, loggedIn: false, email: undefined, syncStatus: "idle", syncError: undefined, installedTools: [], syncedConfigs: 0 }));
+    setToolScans([]);
     setPage("login");
   };
 
@@ -159,7 +131,6 @@ export default function App() {
       return;
     }
 
-    // Browser fallback
     try {
       const data = await apiFetch("/api/sync", {
         method: "POST",
@@ -169,7 +140,6 @@ export default function App() {
         }),
       });
       const configs = data.configs || [];
-      // Collect unique tools from the response
       const tools = new Set<string>();
       for (const c of configs) {
         for (const t of c.targetTools || []) tools.add(t);
@@ -188,75 +158,12 @@ export default function App() {
     }
   };
 
-  const handleSaveSettings = async (apiUrl: string, syncInterval: number) => {
+  const handleSaveSyncInterval = async (syncInterval: number) => {
     if (isTauri) {
-      try { await tauriInvoke("save_settings", { apiUrl, syncInterval }); } catch {}
-    } else {
-      localStorage.setItem("lfc_tray_api_url", apiUrl);
+      try { await tauriInvoke("save_settings", { apiUrl: API_URL, syncInterval }); } catch {}
     }
-    setState((s) => ({ ...s, apiUrl, syncInterval }));
-    setPage("status");
+    setState((s) => ({ ...s, syncInterval }));
   };
-
-  // ─── Suggest handlers ───────────────────────────────────────────────
-
-  const handleDetectConfigs = async (): Promise<LocalConfig[]> => {
-    if (isTauri) {
-      return tauriInvoke<LocalConfig[]>("detect_local_configs");
-    }
-    // Browser fallback — local config detection requires native app
-    console.warn("[LFC] Local config detection requires the native app.");
-    return [];
-  };
-
-  const handleSubmitSuggestion = async (
-    profileId: string,
-    configType: string,
-    title: string,
-    description: string,
-    content: string,
-  ) => {
-    if (isTauri) {
-      await tauriInvoke("submit_suggestion", { profileId, configType, title, description, content });
-      return;
-    }
-    // Browser fallback — call API directly
-    const { orgId } = getStored();
-    await apiFetch(`/api/orgs/${orgId}/suggestions`, {
-      method: "POST",
-      body: JSON.stringify({ profileId, configType, title, description, content }),
-    });
-  };
-
-  const handleGetSuggestions = async (): Promise<Suggestion[]> => {
-    if (isTauri) {
-      return tauriInvoke<Suggestion[]>("get_my_suggestions");
-    }
-    // Browser fallback
-    try {
-      const { orgId } = getStored();
-      const data = await apiFetch(`/api/orgs/${orgId}/suggestions`);
-      return data.suggestions || [];
-    } catch {
-      return [];
-    }
-  };
-
-  const handleFetchProfiles = async (): Promise<Profile[]> => {
-    if (isTauri) {
-      return tauriInvoke<Profile[]>("get_profiles");
-    }
-    // Browser fallback
-    try {
-      const { orgId } = getStored();
-      const data = await apiFetch(`/api/orgs/${orgId}/profiles`);
-      return data.profiles || [];
-    } catch {
-      return [];
-    }
-  };
-
-  // ─── Scan tools handler ────────────────────────────────────────────
 
   const handleScanTools = async () => {
     let scans: ToolScan[] = [];
@@ -264,29 +171,21 @@ export default function App() {
       scans = await tauriInvoke<ToolScan[]>("scan_tools");
     }
     setToolScans(scans);
-    // Upload snapshot to server so admin can see the team's inventory
     if (scans.length > 0) {
       try {
-        await handleUploadSnapshot(scans);
+        if (isTauri) {
+          await tauriInvoke("upload_snapshot", { tools: scans });
+        } else {
+          await apiFetch("/api/snapshots", {
+            method: "POST",
+            body: JSON.stringify({ tools: scans }),
+          });
+        }
       } catch (e) {
         console.warn("[LFC] Snapshot upload failed:", e);
       }
     }
   };
-
-  const handleUploadSnapshot = async (tools: ToolScan[]) => {
-    if (isTauri) {
-      await tauriInvoke("upload_snapshot", { tools });
-      return;
-    }
-    // Browser fallback
-    await apiFetch("/api/snapshots", {
-      method: "POST",
-      body: JSON.stringify({ tools }),
-    });
-  };
-
-  // ─── Render ─────────────────────────────────────────────────────────
 
   if (page === "login") {
     return <Login onLogin={handleLogin} />;
@@ -297,31 +196,8 @@ export default function App() {
       <Onboarding
         scans={toolScans}
         onScanTools={handleScanTools}
-        onUploadSnapshot={handleUploadSnapshot}
         onSyncNow={handleSyncNow}
         onGoToStatus={() => setPage("status")}
-      />
-    );
-  }
-
-  if (page === "settings") {
-    return (
-      <Settings
-        syncInterval={state.syncInterval}
-        onSave={handleSaveSettings}
-        onBack={() => setPage("status")}
-      />
-    );
-  }
-
-  if (page === "suggest") {
-    return (
-      <Suggest
-        onBack={() => setPage("status")}
-        onDetectConfigs={handleDetectConfigs}
-        onSubmitSuggestion={handleSubmitSuggestion}
-        onGetSuggestions={handleGetSuggestions}
-        onFetchProfiles={handleFetchProfiles}
       />
     );
   }
@@ -332,13 +208,12 @@ export default function App() {
       syncStatus={state.syncStatus}
       syncError={state.syncError}
       lastSync={state.lastSync}
-      installedTools={state.installedTools}
       syncedConfigs={state.syncedConfigs}
+      syncInterval={state.syncInterval}
       toolScans={toolScans}
       onSyncNow={handleSyncNow}
       onRescan={handleScanTools}
-      onSettings={() => setPage("settings")}
-      onSuggest={() => setPage("suggest")}
+      onSaveSyncInterval={handleSaveSyncInterval}
       onLogout={handleLogout}
     />
   );
