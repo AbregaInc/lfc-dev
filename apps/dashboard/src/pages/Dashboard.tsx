@@ -229,15 +229,6 @@ export default function Dashboard() {
           >
             Download for Windows
           </a>
-          <span className="text-[12px]" style={{ color: "var(--color-text-tertiary)" }}>
-            or install via CLI:
-          </span>
-          <code
-            className="text-[12px] px-2 py-1 rounded"
-            style={{ background: "var(--color-surface-sunken)", color: "var(--color-text-secondary)" }}
-          >
-            npm i -g lfc-cli
-          </code>
         </div>
       </div>
 
