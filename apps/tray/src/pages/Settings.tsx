@@ -1,17 +1,15 @@
 import { useState } from "react";
+import { API_URL } from "../config";
 
 export default function Settings({
-  apiUrl: initialApiUrl,
   syncInterval: initialInterval,
   onSave,
   onBack,
 }: {
-  apiUrl: string;
   syncInterval: number;
   onSave: (apiUrl: string, syncInterval: number) => void;
   onBack: () => void;
 }) {
-  const [apiUrl, setApiUrl] = useState(initialApiUrl);
   const [syncInterval, setSyncInterval] = useState(initialInterval);
 
   return (
@@ -32,17 +30,6 @@ export default function Settings({
       {/* Content */}
       <div className="flex-1 px-5 py-4 space-y-4">
         <div>
-          <label className="label">API URL</label>
-          <input
-            type="text"
-            value={apiUrl}
-            onChange={(e) => setApiUrl(e.target.value)}
-            className="input-base font-mono"
-            style={{ fontSize: "12px" }}
-          />
-        </div>
-
-        <div>
           <label className="label">Sync interval</label>
           <select
             value={syncInterval}
@@ -62,7 +49,7 @@ export default function Settings({
         className="px-4 py-3 flex gap-2 shrink-0"
         style={{ borderTop: "1px solid var(--color-border)" }}
       >
-        <button onClick={() => onSave(apiUrl, syncInterval)} className="btn-primary flex-1">
+        <button onClick={() => onSave(API_URL, syncInterval)} className="btn-primary flex-1">
           Save
         </button>
         <button onClick={onBack} className="btn-secondary flex-1">

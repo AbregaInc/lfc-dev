@@ -1,15 +1,14 @@
 import { useState } from "react";
+import { API_URL } from "../config";
 
 export default function Login({
-  apiUrl: initialApiUrl,
   onLogin,
 }: {
-  apiUrl: string;
   onLogin: (apiUrl: string, email: string, password: string) => Promise<void>;
 }) {
-  const [apiUrl, setApiUrl] = useState(initialApiUrl);
-  const [email, setEmail] = useState("admin@acme.com");
-  const [password, setPassword] = useState("password123");
+  const isDev = import.meta.env.DEV;
+  const [email, setEmail] = useState(isDev ? "admin@acme.com" : "");
+  const [password, setPassword] = useState(isDev ? "password123" : "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +17,7 @@ export default function Login({
     setError("");
     setLoading(true);
     try {
-      await onLogin(apiUrl, email, password);
+      await onLogin(API_URL, email, password);
     } catch (err: any) {
       setError(typeof err === "string" ? err : err.message || "Login failed");
     } finally {
@@ -54,17 +53,6 @@ export default function Login({
             {error}
           </div>
         )}
-
-        <div>
-          <label className="label">API URL</label>
-          <input
-            type="text"
-            value={apiUrl}
-            onChange={(e) => setApiUrl(e.target.value)}
-            className="input-base font-mono"
-            style={{ fontSize: "12px" }}
-          />
-        </div>
 
         <div>
           <label className="label">Email</label>
