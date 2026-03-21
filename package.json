@@ -2,7 +2,7 @@
   "name": "lfc",
   "private": true,
   "scripts": {
-    "dev": "pnpm -r --parallel --stream --filter @lfc/api --filter @lfc/dashboard dev",
+    "dev": "echo '\n  Dashboard → http://localhost:5173\n  API       → http://localhost:8787\n' && pnpm -r --parallel --stream --filter @lfc/api --filter @lfc/dashboard dev",
     "dev:all": "pnpm -r --parallel --stream --filter @lfc/api --filter @lfc/dashboard --filter @lfc/tray dev",
     "dev:api": "pnpm --filter @lfc/api dev",
     "dev:web": "pnpm --filter @lfc/dashboard dev",
