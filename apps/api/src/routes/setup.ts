@@ -13,7 +13,11 @@ setup.post("/setup", async (c) => {
     return c.json({ error: "Database already initialized" }, 409);
   }
 
-  const password = crypto.randomUUID().slice(0, 16);
+  const isDev = c.env.DEV_SEED === "true";
+  const email = isDev ? "admin@acme.com" : "boris@abrega.com";
+  const orgName = isDev ? "Acme Corp" : "Abrega Inc";
+  const orgSlug = isDev ? "acme" : "abrega";
+  const password = isDev ? "password123" : crypto.randomUUID().slice(0, 16);
   const hash = await bcrypt.hash(password, 10);
 
   const orgId = crypto.randomUUID();
@@ -21,10 +25,10 @@ setup.post("/setup", async (c) => {
   const profileId = crypto.randomUUID();
 
   await db.batch([
-    db.prepare("INSERT INTO orgs (id, name, slug) VALUES (?, ?, ?)").bind(orgId, "Abrega Inc", "abrega"),
+    db.prepare("INSERT INTO orgs (id, name, slug) VALUES (?, ?, ?)").bind(orgId, orgName, orgSlug),
     db
       .prepare("INSERT INTO users (id, email, password_hash, name, org_id, role) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(userId, "boris@abrega.com", hash, "Abrega Inc", orgId, "admin"),
+      .bind(userId, email, hash, orgName, orgId, "admin"),
     db
       .prepare("INSERT INTO profiles (id, org_id, name, description, tools) VALUES (?, ?, ?, ?, ?)")
       .bind(profileId, orgId, "Global", "Default profile for all team members", JSON.stringify(["claude-desktop", "claude-code", "cursor", "codex"])),
@@ -32,8 +36,10 @@ setup.post("/setup", async (c) => {
   ]);
 
   return c.json({
-    message: "Setup complete. Save this password — it is only shown once.",
-    email: "boris@abrega.com",
+    message: isDev
+      ? "Dev setup complete. Login pre-filled on the dashboard."
+      : "Setup complete. Save this password — it is only shown once.",
+    email,
     password,
     orgId,
   });
