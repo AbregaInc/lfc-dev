@@ -30,10 +30,10 @@ export default function Login({
       {/* Header */}
       <div className="px-5 pt-6 pb-4 text-center" style={{ borderBottom: "1px solid var(--color-border)" }}>
         <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold mx-auto mb-3"
-          style={{ background: "var(--color-text-primary)", color: "var(--color-text-inverse)" }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold mx-auto mb-3"
+          style={{ background: "var(--color-accent)", color: "var(--color-text-inverse)" }}
         >
-          LF
+          LFC
         </div>
         <div className="text-[15px] font-semibold" style={{ letterSpacing: "-0.01em" }}>
           Connect to LFC

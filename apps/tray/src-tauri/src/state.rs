@@ -24,7 +24,7 @@ impl Default for AppConfig {
             auth_token: None,
             email: None,
             org_id: None,
-            sync_interval: 300,
+            sync_interval: 7200,
         }
     }
 }

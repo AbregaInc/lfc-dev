@@ -2,18 +2,69 @@ name: Release Tray App
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths:
+      - 'apps/tray/**'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (e.g. v0.1.0)'
-        required: true
 
 permissions:
   contents: write
 
 jobs:
+  version:
+    name: Bump version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: bump
+        run: |
+          # Get latest release tag, default to v0.1.0 if none
+          LATEST=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+          if [ -z "$LATEST" ]; then
+            VERSION="0.1.0"
+          else
+            # Strip 'v' prefix and bump patch
+            BASE="${LATEST#v}"
+            MAJOR=$(echo "$BASE" | cut -d. -f1)
+            MINOR=$(echo "$BASE" | cut -d. -f2)
+            PATCH=$(echo "$BASE" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Next version: v$VERSION"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version in tauri.conf.json
+        run: |
+          cd apps/tray/src-tauri
+          sed -i 's/"version": "[^"]*"/"version": "${{ steps.bump.outputs.version }}"/' tauri.conf.json
+
+      - name: Update version in Cargo.toml
+        run: |
+          cd apps/tray/src-tauri
+          sed -i 's/^version = "[^"]*"/version = "${{ steps.bump.outputs.version }}"/' Cargo.toml
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/tray/src-tauri/tauri.conf.json apps/tray/src-tauri/Cargo.toml
+          git diff --cached --quiet && echo "No version changes" || \
+            git commit -m "chore: bump tray app to v${{ steps.bump.outputs.version }}"
+          git push
+
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +87,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: pnpm/action-setup@v4
 
@@ -83,13 +136,13 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows signing
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Tauri updater signing (v1 uses TAURI_PRIVATE_KEY)
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ''
         with:
           projectPath: apps/tray
-          tagName: ${{ github.ref_name || github.event.inputs.version }}
-          releaseName: 'LFC ${{ github.ref_name || github.event.inputs.version }}'
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: 'LFC ${{ needs.version.outputs.tag }}'
           releaseBody: |
             Download the installer for your platform:
             - **macOS Apple Silicon**: `.dmg` (aarch64)
@@ -97,4 +150,6 @@ jobs:
             - **Windows**: `.msi`
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
+          releaseAssetNamePattern: '[name]_[arch][ext]'
           args: --target ${{ matrix.target }}

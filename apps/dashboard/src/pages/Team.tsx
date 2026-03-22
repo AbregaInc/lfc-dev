@@ -58,6 +58,9 @@ export default function Team() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inventoryFilter, setInventoryFilter] = useState("all");
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [addingToProfile, setAddingToProfile] = useState<string | null>(null);
+  const [addStatus, setAddStatus] = useState<Record<string, "saving" | "saved">>({});
 
   const isAdmin = user?.role === "admin";
 
@@ -69,15 +72,17 @@ export default function Team() {
     if (!user?.orgId) return;
     setLoading(true);
     try {
-      const [usersData, statusData, invData] = await Promise.all([
+      const [usersData, statusData, invData, profilesData] = await Promise.all([
         api.listUsers(user.orgId),
         api.getSyncStatus(user.orgId),
         api.getInventory(user.orgId),
+        api.listProfiles(user.orgId),
       ]);
       setMembers(usersData.users);
       setSyncMembers(statusData.members);
       setInventory(invData.inventory);
       setInvSnapshots(invData.members);
+      setProfiles(profilesData.profiles);
     } catch (err) {
       console.error("Failed to load team data", err);
     } finally {
@@ -105,6 +110,33 @@ export default function Team() {
     await navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleAddToProfile = async (item: any, profileId: string) => {
+    if (!user?.orgId) return;
+    const itemKey = `${item.type}:${item.name}`;
+    setAddStatus((s) => ({ ...s, [itemKey]: "saving" }));
+    try {
+      if (item.type === "mcp") {
+        const profileData = await api.getProfile(user.orgId, profileId);
+        const mcpConfig = profileData.configs.find((c: any) => c.configType === "mcp");
+        let servers: any[] = [];
+        if (mcpConfig) {
+          try { servers = JSON.parse(mcpConfig.content).servers || []; } catch {}
+        }
+        servers.push({ name: item.name, command: item.command || "", args: item.args || [], env: {}, _managed_by: "lfc" });
+        await api.upsertConfig(user.orgId, profileId, "mcp", JSON.stringify({ servers }));
+      } else {
+        const configType = item.type === "skill" ? "skills" : item.type === "agent" ? "agents" : "rules";
+        await api.upsertConfig(user.orgId, profileId, configType, JSON.stringify({ name: item.name, content: item.content || "" }));
+      }
+      setAddStatus((s) => ({ ...s, [itemKey]: "saved" }));
+      setAddingToProfile(null);
+      setTimeout(() => { loadAll(); setAddStatus((s) => { const n = { ...s }; delete n[itemKey]; return n; }); }, 1500);
+    } catch (err) {
+      console.error("Failed to add to profile", err);
+      setAddStatus((s) => { const n = { ...s }; delete n[itemKey]; return n; });
+    }
   };
 
   // Build a merged member view: user data + sync status
@@ -321,45 +353,85 @@ export default function Team() {
                         <th>Name</th>
                         <th>Used by</th>
                         <th>Source</th>
+                        {isAdmin && <th></th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredInventory.map((item: any, i: number) => (
-                        <tr key={`${item.type}-${item.name}-${i}`}>
-                          <td>
-                            <span className="badge" style={{ background: TYPE_COLORS[item.type]?.bg, color: TYPE_COLORS[item.type]?.fg }}>
-                              {TYPE_LABELS[item.type] || item.type}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="text-[13px]" style={{ color: "var(--color-text-primary)" }}>{item.name}</div>
-                            {item.command && (
-                              <div className="text-[11px] font-mono mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
-                                {item.command} {(item.args || []).join(" ")}
+                      {filteredInventory.map((item: any, i: number) => {
+                        const itemKey = `${item.type}:${item.name}`;
+                        const status = addStatus[itemKey];
+                        const isPickingProfile = addingToProfile === itemKey;
+
+                        return (
+                          <tr key={`${item.type}-${item.name}-${i}`}>
+                            <td>
+                              <span className="badge" style={{ background: TYPE_COLORS[item.type]?.bg, color: TYPE_COLORS[item.type]?.fg }}>
+                                {TYPE_LABELS[item.type] || item.type}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="text-[13px]" style={{ color: "var(--color-text-primary)" }}>{item.name}</div>
+                              {item.command && (
+                                <div className="text-[11px] font-mono mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
+                                  {item.command} {(item.args || []).join(" ")}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <div className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+                                {item.users.length} member{item.users.length !== 1 ? "s" : ""}
                               </div>
+                            </td>
+                            <td>
+                              <span
+                                className="badge"
+                                style={{
+                                  background: item.managed ? "rgba(52, 211, 153, 0.08)" : "var(--color-accent-subtle)",
+                                  color: item.managed ? "#34d399" : "var(--color-accent)",
+                                }}
+                              >
+                                {item.managed ? "managed" : "user"}
+                              </span>
+                            </td>
+                            {isAdmin && (
+                              <td>
+                                {item.managed ? null : status === "saved" ? (
+                                  <span className="text-[11px] font-medium" style={{ color: "var(--color-success)" }}>Added</span>
+                                ) : status === "saving" ? (
+                                  <span className="text-[11px]" style={{ color: "var(--color-text-tertiary)" }}>Saving...</span>
+                                ) : isPickingProfile ? (
+                                  <select
+                                    className="input-base text-[11px]"
+                                    style={{ padding: "4px 8px", minWidth: "120px" }}
+                                    autoFocus
+                                    defaultValue=""
+                                    onChange={(e) => {
+                                      if (e.target.value) handleAddToProfile(item, e.target.value);
+                                    }}
+                                    onBlur={() => setAddingToProfile(null)}
+                                  >
+                                    <option value="" disabled>Select profile...</option>
+                                    {profiles.map((p: any) => (
+                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <button
+                                    className="btn-ghost text-[11px]"
+                                    style={{ color: "var(--color-accent)", padding: "2px 8px" }}
+                                    onClick={() => setAddingToProfile(itemKey)}
+                                  >
+                                    Add to profile
+                                  </button>
+                                )}
+                              </td>
                             )}
-                          </td>
-                          <td>
-                            <div className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
-                              {item.users.length} member{item.users.length !== 1 ? "s" : ""}
-                            </div>
-                          </td>
-                          <td>
-                            <span
-                              className="badge"
-                              style={{
-                                background: item.managed ? "rgba(52, 211, 153, 0.08)" : "var(--color-accent-subtle)",
-                                color: item.managed ? "#34d399" : "var(--color-accent)",
-                              }}
-                            >
-                              {item.managed ? "managed" : "user"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                       {filteredInventory.length === 0 && (
                         <tr>
-                          <td colSpan={4} style={{ textAlign: "center", color: "var(--color-text-tertiary)" }}>
+                          <td colSpan={isAdmin ? 5 : 4} style={{ textAlign: "center", color: "var(--color-text-tertiary)" }}>
                             No {inventoryFilter === "all" ? "" : TYPE_LABELS[inventoryFilter]?.toLowerCase() + " "}configs found
                           </td>
                         </tr>

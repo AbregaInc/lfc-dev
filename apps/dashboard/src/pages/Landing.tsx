@@ -99,40 +99,36 @@ function Section({
 
 // ─── Download links ─────────────────────────────────────────────────
 
-const GITHUB_RELEASE = "https://github.com/AbregaInc/lfc-dev/releases/latest";
+const GITHUB_DOWNLOAD = "https://github.com/AbregaInc/lfc-dev/releases/latest/download";
 
 function DownloadLinks({ size = "default" }: { size?: "small" | "default" }) {
   const isSmall = size === "small";
   return (
     <div className={`flex items-center justify-center gap-${isSmall ? "2" : "3"} flex-wrap`}>
       <a
-        href={GITHUB_RELEASE}
+        href={`${GITHUB_DOWNLOAD}/LFC_aarch64.dmg`}
         className={`text-[${isSmall ? "11px" : "13px"}] font-medium px-${isSmall ? "3" : "4"} py-${isSmall ? "1" : "2"} rounded-md`}
         style={{
           border: "1px solid var(--color-border)",
           color: "var(--color-text-secondary)",
           textDecoration: "none",
         }}
-        target="_blank"
-        rel="noopener noreferrer"
       >
         macOS (Apple Silicon)
       </a>
       <a
-        href={GITHUB_RELEASE}
+        href={`${GITHUB_DOWNLOAD}/LFC_x64.dmg`}
         className={`text-[${isSmall ? "11px" : "13px"}] font-medium px-${isSmall ? "3" : "4"} py-${isSmall ? "1" : "2"} rounded-md`}
         style={{
           border: "1px solid var(--color-border)",
           color: "var(--color-text-secondary)",
           textDecoration: "none",
         }}
-        target="_blank"
-        rel="noopener noreferrer"
       >
         macOS (Intel)
       </a>
       <a
-        href={GITHUB_RELEASE}
+        href={`${GITHUB_DOWNLOAD}/LFC_x64.msi`}
         className={`text-[${isSmall ? "11px" : "13px"}] font-medium px-${isSmall ? "3" : "4"} py-${isSmall ? "1" : "2"} rounded-md`}
         style={{
           border: "1px solid var(--color-border)",

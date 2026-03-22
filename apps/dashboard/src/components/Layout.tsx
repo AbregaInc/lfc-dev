@@ -39,17 +39,12 @@ export default function Layout({ children }: { children: ReactNode }) {
       >
         {/* Brand */}
         <div className="px-4 pt-5 pb-4">
-          <div className="flex items-center gap-2">
-            <span
-              className="text-[13px] font-bold tracking-tight"
-              style={{ color: "var(--color-accent-text)" }}
-            >
-              LFC
-            </span>
-            <span className="text-[11px]" style={{ color: "var(--color-text-tertiary)" }}>
-              v0.1
-            </span>
-          </div>
+          <span
+            className="text-[13px] font-bold tracking-tight"
+            style={{ color: "var(--color-accent-text)" }}
+          >
+            LFC
+          </span>
         </div>
 
         {/* Nav */}
