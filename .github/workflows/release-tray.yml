@@ -151,4 +151,5 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
+          releaseAssetNamePattern: '[name]_[arch][ext]'
           args: --target ${{ matrix.target }}
