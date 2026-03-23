@@ -18,10 +18,10 @@ function timeAgo(dateStr: string): string {
 type SyncStatus = "up_to_date" | "outdated" | "never_synced";
 
 function getSyncStatus(member: any): { status: SyncStatus; label: string; bg: string; color: string } {
-  if (!member.lastSync) {
+  if (!member.lastSyncAt) {
     return { status: "never_synced", label: "Never synced", bg: "var(--color-surface-sunken)", color: "var(--color-text-tertiary)" };
   }
-  const hoursSinceSync = (Date.now() - new Date(member.lastSync).getTime()) / (1000 * 60 * 60);
+  const hoursSinceSync = (Date.now() - new Date(member.lastSyncAt).getTime()) / (1000 * 60 * 60);
   const configMatch = member.configVersionMatch !== false;
   if (hoursSinceSync <= 24 && configMatch) {
     return { status: "up_to_date", label: "Up to date", bg: "#f0fdf4", color: "#16a34a" };
@@ -298,7 +298,7 @@ export default function Team() {
                         </div>
                       </td>
                       <td className="px-5 py-3.5 text-[13px] tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
-                        {m.lastSync ? timeAgo(m.lastSync) : "Never"}
+                        {m.lastSyncAt ? timeAgo(m.lastSyncAt) : "Never"}
                       </td>
                       <td className="px-5 py-3.5">
                         <span className="badge" style={{ background: statusInfo.bg, color: statusInfo.color }}>
