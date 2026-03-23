@@ -89,10 +89,13 @@ fn main() {
             }
         }
     }
-    let system_tray = SystemTray::new()
+    let mut system_tray = SystemTray::new()
         .with_icon(tauri::Icon::Rgba { rgba, width: w, height: h })
-        .with_icon_as_template(true)
         .with_menu(tray_menu);
+    #[cfg(target_os = "macos")]
+    {
+        system_tray = system_tray.with_icon_as_template(true);
+    }
 
     let app_state = AppState::new();
 
