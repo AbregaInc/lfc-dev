@@ -4,6 +4,7 @@
 )]
 
 mod commands;
+mod artifact_sync;
 mod state;
 mod sync;
 
@@ -11,8 +12,6 @@ use state::AppState;
 use tauri::{
     CustomMenuItem, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
 };
-#[cfg(target_os = "macos")]
-use tauri::ActivationPolicy;
 
 fn main() {
     eprintln!("[LFC] Initializing system tray...");
@@ -99,7 +98,7 @@ fn main() {
 
     let app_state = AppState::new();
 
-    let mut app = tauri::Builder::default()
+    let app = tauri::Builder::default()
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| match event {
             SystemTrayEvent::LeftClick { .. } => {

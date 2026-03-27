@@ -24,7 +24,7 @@ function toolSummary(scan: ToolScan): string {
   if (scan.skills.length > 0) parts.push(`${scan.skills.length} skill${scan.skills.length !== 1 ? "s" : ""}`);
   if (scan.rules.length > 0) parts.push(`${scan.rules.length} rule${scan.rules.length !== 1 ? "s" : ""}`);
   if (scan.instructions) parts.push("instructions");
-  return parts.length > 0 ? parts.join(", ") : "No configs detected";
+  return parts.length > 0 ? parts.join(", ") : "No artifacts detected";
 }
 
 export default function Onboarding({
@@ -90,7 +90,7 @@ export default function Onboarding({
         </div>
         <div className="text-[12px] mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
           {step === "scanning"
-            ? "Scanning tools and syncing your team's configs"
+            ? "Scanning tools and syncing your team's artifacts"
             : "Your tools are now managed by your team"}
         </div>
       </div>
@@ -160,7 +160,7 @@ export default function Onboarding({
                 style={{ borderColor: "var(--color-accent)", borderWidth: "1px" }}
               >
                 <div className="text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
-                  LFC will keep your configs in sync automatically. Your personal configs are never modified.
+                  LFC will keep your managed artifacts in sync automatically. Your personal configs are never modified.
                 </div>
               </div>
             )}

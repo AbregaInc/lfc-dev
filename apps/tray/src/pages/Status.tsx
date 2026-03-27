@@ -26,7 +26,7 @@ function toolConfigSummary(scan: ToolScan): string {
   if (totalSkills > 0) parts.push(`${totalSkills} skill${totalSkills !== 1 ? "s" : ""}`);
   const totalRules = scan.rules.length;
   if (totalRules > 0) parts.push(`${totalRules} rule${totalRules !== 1 ? "s" : ""}`);
-  return parts.length > 0 ? parts.join(", ") : "No configs";
+  return parts.length > 0 ? parts.join(", ") : "No artifacts";
 }
 
 function unmanagedCount(scan: ToolScan): number {
@@ -172,7 +172,7 @@ export default function Status({
             <div>
               <div className="text-[13px] font-medium">Sync</div>
               <div className="text-[11px] mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
-                {lastSync ? `Last: ${formatTime(lastSync)}` : "Not synced yet"}
+              {lastSync ? `Last: ${formatTime(lastSync)}` : "Not synced yet"}
               </div>
             </div>
             <button onClick={onSyncNow} disabled={isSyncing} className="btn-primary">
@@ -184,7 +184,7 @@ export default function Status({
               className="mt-2.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium"
               style={{ background: "var(--color-success-subtle)", color: "var(--color-success)" }}
             >
-              {syncedConfigs} config{syncedConfigs !== 1 ? "s" : ""} synced
+              {syncedConfigs} artifact{syncedConfigs !== 1 ? "s" : ""} applied
             </div>
           )}
           {isError && (
@@ -263,7 +263,7 @@ export default function Status({
 
                         {items.length === 0 ? (
                           <div className="text-[11px] py-1" style={{ color: "var(--color-text-tertiary)" }}>
-                            No configs detected
+                            No artifacts detected
                           </div>
                         ) : (
                           <div className="space-y-1">

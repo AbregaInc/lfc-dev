@@ -1,6 +1,29 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import * as api from "@/lib/api";
+
 import { useAuth } from "../lib/auth";
-import * as api from "../lib/api";
 
 export default function Secrets() {
   const { user } = useAuth();
@@ -10,7 +33,9 @@ export default function Secrets() {
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
 
-  useEffect(() => { loadSecrets(); }, []);
+  useEffect(() => {
+    void loadSecrets();
+  }, [user?.orgId]);
 
   const loadSecrets = async () => {
     if (!user?.orgId) return;
@@ -18,91 +43,142 @@ export default function Secrets() {
     setSecrets(data.secrets);
   };
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAdd = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
     if (!user?.orgId) return;
+
     try {
       await api.createSecret(user.orgId, newName, newValue);
-      setNewName(""); setNewValue(""); setShowAdd(false);
-      loadSecrets();
-    } catch (err: any) { setError(err.message); }
+      setNewName("");
+      setNewValue("");
+      setShowAdd(false);
+      await loadSecrets();
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
   const handleDelete = async (secretId: string) => {
     if (!user?.orgId) return;
-    if (!confirm("Delete this secret? Any configs referencing it will stop working.")) return;
+    if (
+      !confirm(
+        "Delete this secret? Any release that resolves it will fail verification until you replace it."
+      )
+    ) {
+      return;
+    }
+
     await api.deleteSecret(user.orgId, secretId);
-    loadSecrets();
+    await loadSecrets();
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="page-title">Secrets</h1>
-          <p className="page-subtitle">
-            API keys and tokens. Reference in MCP configs as <code className="font-mono text-[12px] px-1 py-0.5 rounded" style={{ background: "var(--color-surface-sunken)" }}>{"{{SECRET_NAME}}"}</code>
-          </p>
-        </div>
-        <button onClick={() => setShowAdd(true)} className="btn-primary">Add secret</button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Secrets"
+        subtitle='Credentials are resolved into managed launch environments at sync time. Reference them in manifests as {{SECRET_NAME}}.'
+        action={<Button onClick={() => setShowAdd((value) => !value)}>{showAdd ? "Close" : "Add secret"}</Button>}
+      />
 
-      {showAdd && (
-        <div className="card p-5 mb-6">
-          <div className="text-[15px] font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>New secret</div>
-          <form onSubmit={handleAdd} className="space-y-4">
-            {error && (
-              <div className="p-3 rounded-lg text-[13px]" style={{ background: "var(--color-danger-subtle)", color: "var(--color-danger)" }}>{error}</div>
-            )}
-            <div>
-              <label className="label">Name</label>
-              <input type="text" value={newName} onChange={(e) => setNewName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""))} placeholder="e.g., GITHUB_TOKEN" className="input-base font-mono" required />
-            </div>
-            <div>
-              <label className="label">Value</label>
-              <input type="password" value={newValue} onChange={(e) => setNewValue(e.target.value)} placeholder="The secret value" className="input-base font-mono" required />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button type="submit" className="btn-primary">Save secret</button>
-              <button type="button" onClick={() => setShowAdd(false)} className="btn-secondary">Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
+      {showAdd ? (
+        <Card className="py-0">
+          <CardHeader className="border-b py-5">
+            <CardTitle>New secret</CardTitle>
+            <CardDescription>
+              Secrets are encrypted server-side and injected only when an artifact requests them.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="py-5">
+            <form onSubmit={handleAdd} className="space-y-4">
+              {error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : null}
 
-      <div className="card overflow-hidden">
-        {secrets.length === 0 ? (
-          <div className="p-12 text-center text-[14px]" style={{ color: "var(--color-text-tertiary)" }}>No secrets yet.</div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-                <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>Name</th>
-                <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>Value</th>
-                <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-tertiary)" }}>Created</th>
-                <th className="text-right px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {secrets.map((secret, i) => (
-                <tr key={secret.id} style={{ borderBottom: i < secrets.length - 1 ? "1px solid var(--color-border-subtle)" : "none" }}>
-                  <td className="px-5 py-3.5 font-mono text-[13px] font-medium" style={{ color: "var(--color-text-primary)" }}>{secret.name}</td>
-                  <td className="px-5 py-3.5 text-[13px]" style={{ color: "var(--color-text-tertiary)" }}>
-                    <span className="font-mono tracking-widest">{"*".repeat(12)}</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-[13px] tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
+              <div>
+                <Label htmlFor="secret-name">Name</Label>
+                <Input
+                  id="secret-name"
+                  value={newName}
+                  onChange={(event) =>
+                    setNewName(event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""))
+                  }
+                  className="mt-2 font-mono"
+                  placeholder="GITHUB_TOKEN"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="secret-value">Value</Label>
+                <Input
+                  id="secret-value"
+                  type="password"
+                  value={newValue}
+                  onChange={(event) => setNewValue(event.target.value)}
+                  className="mt-2 font-mono"
+                  placeholder="The secret value"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit">Save secret</Button>
+                <Button type="button" variant="outline" onClick={() => setShowAdd(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {secrets.length === 0 ? (
+        <EmptyState
+          title="No secrets yet"
+          description="Add tokens for managed MCP launches, wrappers, and any artifact that resolves environment variables at install time."
+          action={<Button onClick={() => setShowAdd(true)}>Add secret</Button>}
+        />
+      ) : (
+        <Card className="py-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Value</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {secrets.map((secret) => (
+                <TableRow key={secret.id}>
+                  <TableCell className="font-mono font-medium text-foreground">
+                    {secret.name}
+                  </TableCell>
+                  <TableCell className="font-mono tracking-widest text-muted-foreground">
+                    {"*".repeat(12)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {new Date(secret.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <button onClick={() => handleDelete(secret.id)} className="btn-danger">Delete</button>
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => void handleDelete(secret.id)}
+                    >
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+            </TableBody>
+          </Table>
+        </Card>
+      )}
     </div>
   );
 }

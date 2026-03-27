@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env.js";
-import { authMiddleware } from "../auth.js";
+import { authMiddleware, getUser } from "../auth.js";
 
 const users = new Hono<AppEnv>();
 
@@ -9,6 +9,11 @@ users.use("*", authMiddleware);
 users.get("/", async (c) => {
   const db = c.env.DB;
   const { orgId } = c.req.param() as { orgId: string };
+  const user = getUser(c);
+
+  if (user.orgId !== orgId) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   const rows = (
     await db

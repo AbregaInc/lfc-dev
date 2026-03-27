@@ -12,15 +12,19 @@ export interface JwtPayload {
   exp: number;
 }
 
+function resolveJwtSecret(secret: string | undefined): string {
+  return secret || "lfc-local-dev-secret";
+}
+
 export async function signToken(payload: Omit<JwtPayload, "exp">, secret: string): Promise<string> {
   return sign(
     { ...payload, exp: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 },
-    secret
+    resolveJwtSecret(secret)
   );
 }
 
 export async function verifyToken(token: string, secret: string): Promise<JwtPayload> {
-  return (await verify(token, secret, "HS256")) as unknown as JwtPayload;
+  return (await verify(token, resolveJwtSecret(secret), "HS256")) as unknown as JwtPayload;
 }
 
 export async function authMiddleware(c: Context<AppEnv>, next: Next) {

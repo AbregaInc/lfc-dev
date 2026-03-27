@@ -4,39 +4,6 @@ use std::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SyncRequest {
-    #[serde(rename = "installedTools")]
-    pub installed_tools: Vec<String>,
-    #[serde(rename = "currentVersions")]
-    pub current_versions: HashMap<String, u32>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SyncResponse {
-    pub configs: Vec<SyncConfigItem>,
-    pub secrets: HashMap<String, String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SyncConfigItem {
-    #[serde(rename = "profileId")]
-    pub profile_id: String,
-    #[serde(rename = "profileName")]
-    pub profile_name: String,
-    #[serde(rename = "configType")]
-    pub config_type: String,
-    pub content: String,
-    pub version: u32,
-    #[serde(rename = "targetTools")]
-    pub target_tools: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct McpServersPayload {
-    pub servers: Vec<McpServer>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct McpServer {
     pub name: String,
     pub command: String,
@@ -107,37 +74,6 @@ pub fn detect_installed_tools() -> Vec<String> {
     }
 
     tools
-}
-
-// ─── API fetch ──────────────────────────────────────────────────────
-
-/// Fetch configs from the API
-pub async fn fetch_configs(
-    api_url: &str,
-    token: &str,
-    installed_tools: &[String],
-) -> Result<SyncResponse, String> {
-    let client = reqwest::Client::new();
-    let req = SyncRequest {
-        installed_tools: installed_tools.to_vec(),
-        current_versions: HashMap::new(),
-    };
-
-    let resp = client
-        .post(format!("{}/api/sync", api_url))
-        .header("Authorization", format!("Bearer {}", token))
-        .json(&req)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if !resp.status().is_success() {
-        return Err(format!("API error: {}", resp.status()));
-    }
-
-    resp.json::<SyncResponse>()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))
 }
 
 // ─── Config writers (safe — never lose user data) ───────────────────
@@ -1121,87 +1057,4 @@ pub fn scan_tools_detailed() -> Vec<ToolScan> {
     }
 
     results
-}
-
-// ─── Apply sync response ────────────────────────────────────────────
-
-/// Process a sync response — write all configs to the correct locations.
-/// Skips tools that aren't in the known set (no error for unknown tools).
-pub fn apply_sync_response(response: &SyncResponse) -> Result<u32, String> {
-    let mut count = 0;
-
-    for config in &response.configs {
-        for tool in &config.target_tools {
-            // Skip unknown tools gracefully
-            let is_known_tool = mcp_config_path(tool).is_some()
-                || matches!(tool.as_str(), "claude-code" | "codex" | "cursor");
-            if !is_known_tool {
-                println!("[LFC] Skipping unknown tool: {}", tool);
-                continue;
-            }
-
-            match config.config_type.as_str() {
-                "mcp" => {
-                    let payload: McpServersPayload = serde_json::from_str(&config.content)
-                        .map_err(|e| format!("Parse MCP config error: {}", e))?;
-                    write_mcp_config(tool, &payload.servers)?;
-                    count += 1;
-                }
-                "instructions" => {
-                    write_markdown_config(tool, &config.content)?;
-                    count += 1;
-                }
-                "skills" => {
-                    if let Ok(skill) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                        let name = skill["name"].as_str().unwrap_or("unnamed");
-                        let content = skill["content"].as_str().unwrap_or("");
-                        write_skills(tool, name, content)?;
-                        count += 1;
-                    }
-                }
-                "agents" => {
-                    if let Ok(agent) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                        let name = agent["name"].as_str().unwrap_or("unnamed");
-                        let content = agent["content"].as_str().unwrap_or("");
-                        write_agents(tool, name, content)?;
-                        count += 1;
-                    }
-                }
-                "rules" => {
-                    if tool == "cursor" {
-                        // Check if the content is JSON (named rule) or plain text (inline rules)
-                        if let Ok(rule) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                            if rule.get("name").is_some() {
-                                // Named rule file — write to .cursor/rules/lfc-{name}.mdc
-                                let name = rule["name"].as_str().unwrap_or("unnamed");
-                                let content = rule["content"].as_str().unwrap_or("");
-                                write_rules(tool, name, content)?;
-                            } else if rule.get("content").is_some() {
-                                // Inline rules — write to .cursorrules with markers
-                                let content = rule["content"].as_str().unwrap_or("");
-                                write_cursor_rules(content)?;
-                            }
-                        } else {
-                            // Plain text content — write to .cursorrules with markers
-                            write_cursor_rules(&config.content)?;
-                        }
-                        count += 1;
-                    } else {
-                        // claude-code rules: JSON with name/content
-                        if let Ok(rule) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                            let name = rule["name"].as_str().unwrap_or("unnamed");
-                            let content = rule["content"].as_str().unwrap_or("");
-                            write_rules(tool, name, content)?;
-                            count += 1;
-                        }
-                    }
-                }
-                _ => {
-                    println!("[LFC] Skipping unsupported config type: {}", config.config_type);
-                }
-            }
-        }
-    }
-
-    Ok(count)
 }

@@ -14,30 +14,95 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import readline from "readline";
+import { spawnSync } from "child_process";
 
 // ─── Config ──────────────────────────────────────────────────────────
 
 const CONFIG_DIR = path.join(os.homedir(), ".lfc");
 const CONFIG_FILE = path.join(CONFIG_DIR, "cli-config.json");
+const STATE_FILE = path.join(CONFIG_DIR, "cli-state.json");
 const BACKUP_DIR = path.join(CONFIG_DIR, "backups");
+const ARTIFACTS_DIR = path.join(CONFIG_DIR, "artifacts");
+const BIN_DIR = path.join(CONFIG_DIR, "bin");
 
 interface CliConfig {
   apiUrl: string;
   token: string | null;
   email: string | null;
+  orgId: string | null;
+  deviceId: string | null;
 }
 
 function loadConfig(): CliConfig {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
   } catch {
-    return { apiUrl: "http://localhost:3001", token: null, email: null };
+    return { apiUrl: "http://localhost:8787", token: null, email: null, orgId: null, deviceId: null };
   }
 }
 
 function saveConfig(config: CliConfig) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+type DeviceActualState =
+  | "pending"
+  | "fetching"
+  | "installing"
+  | "staged"
+  | "verifying"
+  | "active"
+  | "failed"
+  | "rollback_pending"
+  | "rolled_back"
+  | "removed"
+  | "config_applied_unverified"
+  | "failed_prerequisites"
+  | "unknown_runtime";
+
+interface LocalArtifactState {
+  artifactReleaseId: string;
+  desiredState: "active" | "removed";
+  actualState: DeviceActualState;
+  activationState?: string;
+  installRoot?: string;
+  wrapperPath?: string;
+  previousReleaseId?: string;
+  lastErrorCode?: string;
+  lastErrorDetail?: string;
+  inventoryJson?: Record<string, unknown>;
+  lastVerifiedAt?: string;
+  lastTransitionAt: string;
+}
+
+interface LocalEvent {
+  at: string;
+  artifactReleaseId?: string;
+  eventType: string;
+  detail?: string;
+}
+
+interface CliState {
+  artifactStates: Record<string, LocalArtifactState>;
+  events: LocalEvent[];
+}
+
+function loadState(): CliState {
+  try {
+    return JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
+  } catch {
+    return { artifactStates: {}, events: [] };
+  }
+}
+
+function saveState(state: CliState) {
+  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+function logLocalEvent(state: CliState, event: LocalEvent) {
+  state.events = [event, ...state.events].slice(0, 200);
 }
 
 // ─── Safety: backup before any write ─────────────────────────────────
@@ -119,6 +184,179 @@ function detectTools(): DetectedTool[] {
     },
   ];
   return tools;
+}
+
+interface ManifestEnvField {
+  name: string;
+  required: boolean;
+  secretRef?: string;
+  defaultValue?: string;
+}
+
+interface ArtifactManifest {
+  kind: "instructions" | "rule" | "agent" | "skill" | "mcp" | "plugin";
+  reliabilityTier: "managed" | "best_effort" | "unreliable";
+  source: {
+    type: "inline_files" | "npm" | "pypi" | "binary" | "docker" | "marketplace" | "raw_command" | "raw_path";
+    ref: string;
+    version?: string;
+    digest?: string;
+    metadata?: Record<string, unknown>;
+  };
+  runtime: {
+    kind: "none" | "node" | "python" | "docker" | "native";
+    version?: string;
+    provisionMode: "managed" | "system";
+  };
+  install: {
+    strategy: "copy_files" | "npm_package" | "python_package" | "download_binary" | "pull_image" | "write_config_only";
+    managedRoot: string;
+    wrapperName?: string;
+  };
+  launch?: {
+    command: string;
+    args: string[];
+    env: ManifestEnvField[];
+  };
+  verify?: {
+    type: "file_hash" | "exec" | "http" | "none";
+    command?: string;
+    args?: string[];
+    url?: string;
+    timeoutMs?: number;
+    expectedExitCode?: number;
+  };
+  payload?: {
+    files?: Array<{ path: string; content: string; executable?: boolean }>;
+    downloadUrl?: string;
+    checksum?: string;
+    image?: string;
+    metadata?: Record<string, unknown>;
+  };
+  compatibility: {
+    os: string[];
+    arch: string[];
+    tools: string[];
+  };
+  bindings: Array<{
+    tool: string;
+    bindingType: "instructions" | "rule" | "agent" | "skill" | "mcp" | "plugin";
+    targetPath?: string;
+    configTemplate?: string;
+    configJson?: Record<string, unknown>;
+  }>;
+}
+
+interface SyncAssignment {
+  assignmentId: string;
+  profileId: string;
+  profileName: string;
+  desiredState: "active" | "removed";
+  rolloutStrategy: "all_at_once" | "canary" | "phased";
+  artifact: {
+    id: string;
+    slug: string;
+    name: string;
+    kind: string;
+  };
+  release: {
+    id: string;
+    artifactId: string;
+    version: string;
+    status: string;
+    reliabilityTier: "managed" | "best_effort" | "unreliable";
+    manifest: ArtifactManifest;
+  };
+  resolvedSecrets: Record<string, string>;
+}
+
+interface DeviceRegistrationResponse {
+  device: {
+    id: string;
+    orgId: string;
+    userId: string;
+    name: string;
+    platform: string;
+    arch: string;
+    clientKind: string;
+    clientVersion: string;
+    status: string;
+    lastSeenAt: string;
+  };
+  featureFlags: Record<string, boolean>;
+}
+
+interface DeviceSyncResponse {
+  device: DeviceRegistrationResponse["device"];
+  assignments: SyncAssignment[];
+  removals: string[];
+  serverTime: string;
+}
+
+interface InstallResult {
+  installRoot: string;
+  wrapperPath?: string;
+}
+
+function ensureDir(dirPath: string) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function artifactRoot(releaseId: string) {
+  return path.join(ARTIFACTS_DIR, releaseId);
+}
+
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
+function writeExecutable(filePath: string, content: string) {
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, content);
+  fs.chmodSync(filePath, 0o755);
+}
+
+function runCommand(command: string, args: string[], cwd?: string) {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf-8",
+    stdio: "pipe",
+  });
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || `${command} failed`).trim());
+  }
+  return result.stdout.trim();
+}
+
+function findPythonCommand(): string | null {
+  for (const candidate of ["python3", "python"]) {
+    const result = spawnSync(candidate, ["--version"], { encoding: "utf-8", stdio: "pipe" });
+    if (result.status === 0) return candidate;
+  }
+  return null;
+}
+
+function hasManagedMcpEntries(toolId: string) {
+  const pathFn = MCP_PATHS[toolId];
+  if (!pathFn) return false;
+  const configPath = pathFn(os.homedir());
+  if (!fs.existsSync(configPath)) return false;
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    return Object.values(config.mcpServers || {}).some((value: any) => value?._managed_by === "lfc");
+  } catch {
+    return false;
+  }
+}
+
+function hasManagedMarkdownBlock(filePath: string) {
+  if (!fs.existsSync(filePath)) return false;
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    return content.includes("<!-- lfc:start -->") && content.includes("<!-- lfc:end -->");
+  } catch {
+    return false;
+  }
 }
 
 // ─── Config Writers (SAFE — never lose user data) ────────────────────
@@ -410,6 +648,55 @@ function writeSkill(toolId: string, name: string, content: string, dryRun: boole
   return `  ${skillPath} (written)`;
 }
 
+function removeManagedSkills(desiredNames: Set<string>, dryRun: boolean): string[] {
+  const skillsDir = path.join(os.homedir(), ".claude/skills");
+  if (!fs.existsSync(skillsDir)) return [];
+  const removed: string[] = [];
+  for (const entry of fs.readdirSync(skillsDir)) {
+    if (!entry.startsWith("lfc-")) continue;
+    const logicalName = entry.replace(/^lfc-/, "").replace(/\.md$/, "");
+    if (desiredNames.has(logicalName)) continue;
+    const target = path.join(skillsDir, entry);
+    removed.push(target);
+    if (!dryRun) fs.rmSync(target, { recursive: true, force: true });
+  }
+  return removed;
+}
+
+function removeManagedAgents(desiredNames: Set<string>, dryRun: boolean): string[] {
+  const agentsDir = path.join(os.homedir(), ".claude/agents");
+  if (!fs.existsSync(agentsDir)) return [];
+  const removed: string[] = [];
+  for (const entry of fs.readdirSync(agentsDir)) {
+    if (!entry.startsWith("lfc-")) continue;
+    const logicalName = entry.replace(/^lfc-/, "").replace(/\.md$/, "");
+    if (desiredNames.has(logicalName)) continue;
+    const target = path.join(agentsDir, entry);
+    removed.push(target);
+    if (!dryRun) fs.rmSync(target, { force: true });
+  }
+  return removed;
+}
+
+function removeManagedRules(toolId: string, desiredNames: Set<string>, dryRun: boolean): string[] {
+  const home = os.homedir();
+  const rulesDir =
+    toolId === "cursor" ? path.join(home, ".cursor/rules")
+    : toolId === "claude-code" ? path.join(home, ".claude/rules")
+    : null;
+  if (!rulesDir || !fs.existsSync(rulesDir)) return [];
+  const removed: string[] = [];
+  for (const entry of fs.readdirSync(rulesDir)) {
+    if (!entry.startsWith("lfc-")) continue;
+    const logicalName = entry.replace(/^lfc-/, "").replace(/\.(md|mdc)$/, "");
+    if (desiredNames.has(logicalName)) continue;
+    const target = path.join(rulesDir, entry);
+    removed.push(target);
+    if (!dryRun) fs.rmSync(target, { force: true });
+  }
+  return removed;
+}
+
 // ─── Reset (remove all lfc-managed entries) ──────────────────────────
 
 function resetConfigs(dryRun: boolean) {
@@ -521,6 +808,443 @@ function resetConfigs(dryRun: boolean) {
   }
 }
 
+function buildInventorySnapshot() {
+  return {
+    tools: detectTools().map((tool) => ({
+      id: tool.id,
+      name: tool.name,
+      installed: tool.exists,
+    })),
+  };
+}
+
+async function registerDevice(config: CliConfig): Promise<DeviceRegistrationResponse> {
+  const detectedTools = detectTools().map((tool) => ({
+    tool: tool.id,
+    installed: tool.exists,
+  }));
+
+  const response = await apiRequest(config, "POST", "/api/devices/register", {
+    deviceId: config.deviceId,
+    name: `${os.userInfo().username}@${os.hostname()}`,
+    platform: process.platform,
+    arch: process.arch,
+    clientKind: "cli",
+    clientVersion: "0.1.0",
+    detectedTools,
+  });
+
+  config.deviceId = response.device.id;
+  saveConfig(config);
+  return response as DeviceRegistrationResponse;
+}
+
+function resolveBindingContent(assignment: SyncAssignment) {
+  const files = assignment.release.manifest.payload?.files || [];
+  if (files.length === 0) return "";
+  const preferred =
+    files.find((file) => /SKILL\.md$/i.test(file.path)) ||
+    files.find((file) => /instructions/i.test(file.path)) ||
+    files[0];
+  return preferred?.content || "";
+}
+
+function renderInstructionBlock(assignment: SyncAssignment) {
+  const content = resolveBindingContent(assignment).trim();
+  return content
+    ? `# ${assignment.artifact.name}\n${content}`
+    : `# ${assignment.artifact.name}\n`;
+}
+
+function writeEnvFiles(root: string, manifest: ArtifactManifest, resolvedSecrets: Record<string, string>) {
+  const envDir = path.join(root, "env");
+  ensureDir(envDir);
+  const envLines: string[] = [];
+  for (const field of manifest.launch?.env || []) {
+    const value = resolvedSecrets[field.name] ?? field.defaultValue;
+    if (value !== undefined) {
+      envLines.push(`export ${field.name}=${shellEscape(String(value))}`);
+    }
+  }
+  const envFile = path.join(envDir, "env.sh");
+  fs.writeFileSync(envFile, `${envLines.join("\n")}\n`, { mode: 0o600 });
+  return envFile;
+}
+
+function installCopyFiles(assignment: SyncAssignment, dryRun: boolean): InstallResult {
+  const root = artifactRoot(assignment.release.id);
+  const files = assignment.release.manifest.payload?.files || [];
+  if (!dryRun) {
+    ensureDir(path.join(root, "payload"));
+    for (const file of files) {
+      const target = path.join(root, "payload", file.path);
+      ensureDir(path.dirname(target));
+      fs.writeFileSync(target, file.content);
+      if (file.executable) fs.chmodSync(target, 0o755);
+    }
+  }
+  return { installRoot: root };
+}
+
+function installNpmPackage(assignment: SyncAssignment, dryRun: boolean): InstallResult {
+  const manifest = assignment.release.manifest;
+  if (!manifest.launch?.command || !manifest.source.version) {
+    throw new Error("npm_package installer requires launch.command and source.version");
+  }
+
+  const root = artifactRoot(assignment.release.id);
+  const wrapperPath = path.join(BIN_DIR, manifest.install.wrapperName || assignment.artifact.slug);
+  if (!dryRun) {
+    ensureDir(root);
+    ensureDir(BIN_DIR);
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ private: true, name: `lfc-${assignment.release.id}` }, null, 2));
+    runCommand("npm", ["install", "--silent", "--no-package-lock", "--prefix", root, `${manifest.source.ref}@${manifest.source.version}`], root);
+    const envFile = writeEnvFiles(root, manifest, assignment.resolvedSecrets);
+    writeExecutable(
+      wrapperPath,
+      `#!/bin/sh\nset -e\n. ${shellEscape(envFile)}\nexec ${shellEscape(path.join(root, "node_modules", ".bin", manifest.launch.command))} "$@"\n`
+    );
+  }
+  return { installRoot: root, wrapperPath };
+}
+
+function installPythonPackage(assignment: SyncAssignment, dryRun: boolean): InstallResult {
+  const manifest = assignment.release.manifest;
+  if (!manifest.launch?.command || !manifest.source.version) {
+    throw new Error("python_package installer requires launch.command and source.version");
+  }
+  const python = findPythonCommand();
+  if (!python) {
+    const error = new Error("python3/python not found");
+    (error as any).code = "missing_python";
+    throw error;
+  }
+
+  const root = artifactRoot(assignment.release.id);
+  const venvDir = path.join(root, "venv");
+  const wrapperPath = path.join(BIN_DIR, manifest.install.wrapperName || assignment.artifact.slug);
+  if (!dryRun) {
+    ensureDir(root);
+    ensureDir(BIN_DIR);
+    runCommand(python, ["-m", "venv", venvDir], root);
+    const pip = path.join(venvDir, "bin", "pip");
+    runCommand(pip, ["install", `${manifest.source.ref}==${manifest.source.version}`], root);
+    const envFile = writeEnvFiles(root, manifest, assignment.resolvedSecrets);
+    writeExecutable(
+      wrapperPath,
+      `#!/bin/sh\nset -e\n. ${shellEscape(envFile)}\nexec ${shellEscape(path.join(venvDir, "bin", manifest.launch.command))} "$@"\n`
+    );
+  }
+  return { installRoot: root, wrapperPath };
+}
+
+async function installBinaryDownload(assignment: SyncAssignment, dryRun: boolean): Promise<InstallResult> {
+  const manifest = assignment.release.manifest;
+  if (!manifest.payload?.downloadUrl || !manifest.launch?.command) {
+    throw new Error("download_binary installer requires payload.downloadUrl and launch.command");
+  }
+  const root = artifactRoot(assignment.release.id);
+  const binaryPath = path.join(root, "bin", manifest.launch.command);
+  const wrapperPath = path.join(BIN_DIR, manifest.install.wrapperName || assignment.artifact.slug);
+  if (!dryRun) {
+    ensureDir(path.dirname(binaryPath));
+    ensureDir(BIN_DIR);
+    const res = await fetch(manifest.payload.downloadUrl);
+    if (!res.ok) throw new Error(`Failed to download binary: HTTP ${res.status}`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(binaryPath, buffer);
+    fs.chmodSync(binaryPath, 0o755);
+    const envFile = writeEnvFiles(root, manifest, assignment.resolvedSecrets);
+    writeExecutable(
+      wrapperPath,
+      `#!/bin/sh\nset -e\n. ${shellEscape(envFile)}\nexec ${shellEscape(binaryPath)} "$@"\n`
+    );
+  }
+  return { installRoot: root, wrapperPath };
+}
+
+function installDockerImage(assignment: SyncAssignment, dryRun: boolean): InstallResult {
+  const manifest = assignment.release.manifest;
+  const image = manifest.payload?.image || manifest.source.ref;
+  const wrapperPath = path.join(BIN_DIR, manifest.install.wrapperName || assignment.artifact.slug);
+  const root = artifactRoot(assignment.release.id);
+  if (!image || !manifest.launch?.command) {
+    throw new Error("pull_image installer requires an image and launch.command");
+  }
+  if (!dryRun) {
+    ensureDir(root);
+    ensureDir(BIN_DIR);
+    runCommand("docker", ["pull", image], root);
+    const envFile = writeEnvFiles(root, manifest, assignment.resolvedSecrets);
+    writeExecutable(
+      wrapperPath,
+      `#!/bin/sh\nset -e\n. ${shellEscape(envFile)}\nexec docker run --rm -i --entrypoint ${shellEscape(manifest.launch.command)} ${shellEscape(image)} "$@"\n`
+    );
+  }
+  return { installRoot: root, wrapperPath };
+}
+
+function installWriteConfigOnly(assignment: SyncAssignment): InstallResult {
+  return {
+    installRoot: artifactRoot(assignment.release.id),
+    wrapperPath: assignment.release.manifest.launch?.command,
+  };
+}
+
+async function ensureAssignmentInstalled(assignment: SyncAssignment, dryRun: boolean): Promise<InstallResult> {
+  switch (assignment.release.manifest.install.strategy) {
+    case "copy_files":
+      return installCopyFiles(assignment, dryRun);
+    case "npm_package":
+      return installNpmPackage(assignment, dryRun);
+    case "python_package":
+      return installPythonPackage(assignment, dryRun);
+    case "download_binary":
+      return installBinaryDownload(assignment, dryRun);
+    case "pull_image":
+      return installDockerImage(assignment, dryRun);
+    case "write_config_only":
+      return installWriteConfigOnly(assignment);
+    default:
+      throw new Error(`Unsupported install strategy: ${assignment.release.manifest.install.strategy}`);
+  }
+}
+
+function cleanupArtifactInstalls(keepReleaseIds: Set<string>, dryRun: boolean) {
+  if (!fs.existsSync(ARTIFACTS_DIR)) return [];
+  const removed: string[] = [];
+  for (const entry of fs.readdirSync(ARTIFACTS_DIR)) {
+    if (keepReleaseIds.has(entry)) continue;
+    const target = path.join(ARTIFACTS_DIR, entry);
+    removed.push(target);
+    if (!dryRun) fs.rmSync(target, { recursive: true, force: true });
+  }
+  if (!fs.existsSync(BIN_DIR)) return removed;
+  for (const entry of fs.readdirSync(BIN_DIR)) {
+    const target = path.join(BIN_DIR, entry);
+    const content = fs.readFileSync(target, "utf-8");
+    const matchesKeep = [...keepReleaseIds].some((releaseId) => content.includes(releaseId));
+    if (matchesKeep) continue;
+    removed.push(target);
+    if (!dryRun) fs.rmSync(target, { force: true });
+  }
+  return removed;
+}
+
+function verifyAssignment(assignment: SyncAssignment, runtimeCommand: string | undefined, dryRun: boolean) {
+  const verify = assignment.release.manifest.verify;
+  if (!verify || verify.type === "none" || dryRun) return { actualState: assignment.release.reliabilityTier === "unreliable" ? "config_applied_unverified" : "active" as DeviceActualState };
+
+  try {
+    if (verify.type === "exec") {
+      const command = runtimeCommand || verify.command || assignment.release.manifest.launch?.command;
+      if (!command) {
+        return { actualState: "unknown_runtime" as DeviceActualState, lastErrorCode: "missing_verify_command", lastErrorDetail: "No verification command available" };
+      }
+      runCommand(command, verify.args || []);
+    }
+    return { actualState: "active" as DeviceActualState, lastVerifiedAt: new Date().toISOString() };
+  } catch (error: any) {
+    return {
+      actualState: "failed" as DeviceActualState,
+      lastErrorCode: "verify_failed",
+      lastErrorDetail: error.message,
+    };
+  }
+}
+
+async function applyAssignments(assignments: SyncAssignment[], removals: string[], state: CliState, dryRun: boolean) {
+  const results: LocalArtifactState[] = [];
+  const installedToolIds = new Set(detectTools().filter((tool) => tool.exists).map((tool) => tool.id));
+  const instructionsByTool = new Map<string, string[]>();
+  const inlineRulesByTool = new Map<string, string[]>();
+  const mcpServersByTool = new Map<string, McpServer[]>();
+  const desiredSkills = new Set<string>();
+  const desiredAgents = new Set<string>();
+  const desiredClaudeRules = new Set<string>();
+  const desiredCursorRules = new Set<string>();
+
+  for (const assignment of assignments) {
+    const releaseId = assignment.release.id;
+    const currentState: LocalArtifactState = state.artifactStates[releaseId] || {
+      artifactReleaseId: releaseId,
+      desiredState: "active",
+      actualState: "pending",
+      lastTransitionAt: new Date().toISOString(),
+    };
+
+    try {
+      currentState.desiredState = assignment.desiredState;
+      currentState.actualState = "installing";
+      currentState.lastTransitionAt = new Date().toISOString();
+
+      const installResult = await ensureAssignmentInstalled(assignment, dryRun);
+      currentState.installRoot = installResult.installRoot;
+      if (installResult.wrapperPath) currentState.wrapperPath = installResult.wrapperPath;
+
+      for (const binding of assignment.release.manifest.bindings) {
+        const bindingContent = resolveBindingContent(assignment);
+        if (binding.bindingType === "instructions") {
+          const blocks = instructionsByTool.get(binding.tool) || [];
+          blocks.push(renderInstructionBlock(assignment));
+          instructionsByTool.set(binding.tool, blocks);
+        } else if (binding.bindingType === "rule" && binding.tool === "cursor" && binding.configJson?.inline === true) {
+          const blocks = inlineRulesByTool.get(binding.tool) || [];
+          blocks.push(renderInstructionBlock(assignment));
+          inlineRulesByTool.set(binding.tool, blocks);
+        } else if (binding.bindingType === "mcp") {
+          const servers = mcpServersByTool.get(binding.tool) || [];
+          servers.push({
+            name: String(binding.configJson?.serverName || assignment.artifact.slug),
+            command: installResult.wrapperPath || assignment.release.manifest.launch?.command || "",
+            args: Array.isArray(binding.configJson?.args) ? binding.configJson?.args as string[] : assignment.release.manifest.launch?.args || [],
+            env: Object.fromEntries(
+              (assignment.release.manifest.launch?.env || [])
+                .map((field) => [
+                  field.name,
+                  assignment.resolvedSecrets[field.name] ?? field.defaultValue ?? "",
+                ])
+                .filter(([, value]) => value !== "")
+            ),
+            _managed_by: "lfc",
+          });
+          mcpServersByTool.set(binding.tool, servers);
+        } else if (binding.bindingType === "skill") {
+          desiredSkills.add(assignment.artifact.slug);
+          console.log(writeSkill(binding.tool, assignment.artifact.slug, bindingContent, dryRun));
+        } else if (binding.bindingType === "agent") {
+          desiredAgents.add(assignment.artifact.slug);
+          console.log(writeAgent(binding.tool, assignment.artifact.slug, bindingContent, dryRun));
+        } else if (binding.bindingType === "rule") {
+          if (binding.tool === "cursor") desiredCursorRules.add(assignment.artifact.slug);
+          if (binding.tool === "claude-code") desiredClaudeRules.add(assignment.artifact.slug);
+          console.log(writeRule(binding.tool, assignment.artifact.slug, bindingContent, dryRun));
+        }
+      }
+
+      const verification = verifyAssignment(assignment, installResult.wrapperPath, dryRun);
+      currentState.actualState = verification.actualState;
+      currentState.lastVerifiedAt = verification.lastVerifiedAt;
+      currentState.lastErrorCode = verification.lastErrorCode;
+      currentState.lastErrorDetail = verification.lastErrorDetail;
+      currentState.lastTransitionAt = new Date().toISOString();
+    } catch (error: any) {
+      currentState.actualState = error.code === "missing_python" ? "failed_prerequisites" : "failed";
+      currentState.lastErrorCode = error.code || "install_failed";
+      currentState.lastErrorDetail = error.message;
+      currentState.lastTransitionAt = new Date().toISOString();
+      logLocalEvent(state, {
+        at: currentState.lastTransitionAt,
+        artifactReleaseId: releaseId,
+        eventType: "install_failed",
+        detail: error.message,
+      });
+    }
+
+    state.artifactStates[releaseId] = currentState;
+    results.push(currentState);
+  }
+
+  for (const tool of ["claude-code", "codex"]) {
+    const markdownPath =
+      tool === "claude-code" ? path.join(os.homedir(), ".claude/CLAUDE.md")
+      : path.join(os.homedir(), "AGENTS.md");
+    if ((instructionsByTool.get(tool) || []).length > 0 || hasManagedMarkdownBlock(markdownPath)) {
+      console.log(writeMarkdownConfig(tool, (instructionsByTool.get(tool) || []).join("\n\n"), dryRun));
+    }
+  }
+  if ((inlineRulesByTool.get("cursor") || []).length > 0 || hasManagedMarkdownBlock(path.join(os.homedir(), ".cursorrules"))) {
+    console.log(writeCursorRules((inlineRulesByTool.get("cursor") || []).join("\n\n"), dryRun));
+  }
+  for (const tool of Object.keys(MCP_PATHS)) {
+    if ((mcpServersByTool.get(tool) || []).length > 0 || hasManagedMcpEntries(tool)) {
+      console.log(writeMcpConfig(tool, mcpServersByTool.get(tool) || [], dryRun));
+    }
+  }
+
+  const removedSkills = removeManagedSkills(desiredSkills, dryRun);
+  const removedAgents = removeManagedAgents(desiredAgents, dryRun);
+  const removedClaudeRules = removeManagedRules("claude-code", desiredClaudeRules, dryRun);
+  const removedCursorRules = removeManagedRules("cursor", desiredCursorRules, dryRun);
+  const removedInstalls = cleanupArtifactInstalls(new Set(assignments.map((assignment) => assignment.release.id)), dryRun);
+
+  for (const removed of [...removedSkills, ...removedAgents, ...removedClaudeRules, ...removedCursorRules, ...removedInstalls]) {
+    console.log(`  [cleanup] ${removed}`);
+  }
+
+  for (const releaseId of removals) {
+    delete state.artifactStates[releaseId];
+  }
+
+  return results;
+}
+
+async function syncDevice(config: CliConfig, state: CliState, dryRun: boolean) {
+  if (!config.deviceId) {
+    const registration = await registerDevice(config);
+    console.log(`Registered device ${registration.device.name} (${registration.device.id})`);
+  }
+
+  const detectedTools = detectTools().map((tool) => ({
+    tool: tool.id,
+    installed: tool.exists,
+  }));
+
+  const response = await apiRequest(config, "POST", `/api/devices/${config.deviceId}/sync`, {
+    detectedTools,
+    states: Object.values(state.artifactStates),
+    inventory: buildInventorySnapshot(),
+  }) as DeviceSyncResponse;
+
+  console.log(`Server time: ${response.serverTime}`);
+  console.log(`Assignments: ${response.assignments.length}`);
+  if (response.removals.length > 0) {
+    console.log(`Removals: ${response.removals.join(", ")}`);
+  }
+
+  const appliedStates = await applyAssignments(response.assignments, response.removals, state, dryRun);
+  const checks = appliedStates
+    .filter((artifactState) => artifactState.actualState === "active" || artifactState.actualState === "config_applied_unverified")
+    .map((artifactState) => ({
+      artifactReleaseId: artifactState.artifactReleaseId,
+      result: artifactState.actualState === "active" ? "pass" : "unknown",
+      durationMs: 0,
+      detailsJson: null,
+    }));
+
+  if (!dryRun && checks.length > 0) {
+    await apiRequest(config, "POST", `/api/devices/${config.deviceId}/health`, { checks });
+  }
+
+  saveState(state);
+}
+
+function cmdDoctor() {
+  console.log("\nRuntime doctor:\n");
+  for (const [command, args] of [["node", ["--version"]], ["npm", ["--version"]], ["python3", ["--version"]], ["docker", ["--version"]]] as const) {
+    const result = spawnSync(command, args, { encoding: "utf-8", stdio: "pipe" });
+    if (result.status === 0) {
+      console.log(`  [ok] ${command}: ${(result.stdout || result.stderr).trim()}`);
+    } else {
+      console.log(`  [missing] ${command}`);
+    }
+  }
+  console.log("");
+}
+
+function cmdEvents() {
+  const state = loadState();
+  console.log("\nRecent local events:\n");
+  if (state.events.length === 0) {
+    console.log("  (none)\n");
+    return;
+  }
+  for (const event of state.events.slice(0, 20)) {
+    console.log(`  ${event.at}  ${event.eventType}${event.artifactReleaseId ? `  ${event.artifactReleaseId}` : ""}${event.detail ? `  ${event.detail}` : ""}`);
+  }
+  console.log("");
+}
+
 // ─── Prompt helper ───────────────────────────────────────────────────
 
 function prompt(question: string): Promise<string> {
@@ -542,6 +1266,7 @@ async function cmdLogin() {
     const data = await apiRequest(config, "POST", "/api/auth/login", { email, password });
     config.token = data.token;
     config.email = email;
+    config.orgId = data.user.orgId || null;
     saveConfig(config);
     console.log(`\nLogged in as ${email} (org: ${data.user.orgId || "none"})`);
     console.log(`Config saved to ${CONFIG_FILE}`);
@@ -553,10 +1278,14 @@ async function cmdLogin() {
 
 async function cmdStatus() {
   const config = loadConfig();
+  const state = loadState();
   console.log("\n--- LFC Client Status ---\n");
   console.log(`API:   ${config.apiUrl}`);
   console.log(`User:  ${config.email || "(not logged in)"}`);
   console.log(`Token: ${config.token ? config.token.slice(0, 20) + "..." : "(none)"}`);
+  console.log(`Org:   ${config.orgId || "(none)"}`);
+  console.log(`Device:${config.deviceId || "(not registered)"}`);
+  console.log(`States:${Object.keys(state.artifactStates).length}`);
 
   console.log("\nDetected tools:");
   const tools = detectTools();
@@ -576,107 +1305,16 @@ async function cmdStatus() {
 
 async function cmdSync(dryRun: boolean) {
   const config = loadConfig();
+  const state = loadState();
   if (!config.token) {
     console.error("Not logged in. Run: pnpm --filter cli lfc login");
     process.exit(1);
   }
 
-  const tools = detectTools();
-  const installed = tools.filter((t) => t.exists).map((t) => t.id);
-
-  console.log(dryRun ? "\n[dry-run] Sync preview:\n" : "\nSyncing configs...\n");
-  console.log(`Installed tools: ${installed.join(", ") || "(none detected)"}\n`);
-
   try {
-    const data = await apiRequest(config, "POST", "/api/sync", {
-      installedTools: installed,
-      currentVersions: {},
-    });
-
-    if (data.configs.length === 0) {
-      console.log("No configs to sync. All up to date.");
-      return;
-    }
-
-    for (const item of data.configs) {
-      console.log(`Profile: ${item.profileName} / ${item.configType} (v${item.version})`);
-      console.log(`Target tools: ${item.targetTools.join(", ")}`);
-
-      for (const tool of item.targetTools) {
-        // Skip unknown tools gracefully
-        const knownTools = new Set([...Object.keys(MCP_PATHS), "claude-code", "codex", "cursor"]);
-        if (!knownTools.has(tool)) {
-          console.log(`  [skip] Unknown tool: ${tool}`);
-          continue;
-        }
-
-        let result: string;
-        switch (item.configType) {
-          case "mcp": {
-            const payload = JSON.parse(item.content);
-            result = writeMcpConfig(tool, payload.servers, dryRun);
-            break;
-          }
-          case "instructions": {
-            result = writeMarkdownConfig(tool, item.content, dryRun);
-            break;
-          }
-          case "skills": {
-            try {
-              const skill = JSON.parse(item.content);
-              result = writeSkill(tool, skill.name || "unnamed", skill.content || "", dryRun);
-            } catch {
-              result = `  [skip] Invalid skill content`;
-            }
-            break;
-          }
-          case "agents": {
-            try {
-              const agent = JSON.parse(item.content);
-              result = writeAgent(tool, agent.name || "unnamed", agent.content || "", dryRun);
-            } catch {
-              result = `  [skip] Invalid agent content`;
-            }
-            break;
-          }
-          case "rules": {
-            if (tool === "cursor") {
-              // Check if it's JSON (named rule) or plain text (inline rules)
-              try {
-                const rule = JSON.parse(item.content);
-                if (rule.name) {
-                  // Named rule file — write to .cursor/rules/lfc-{name}.mdc
-                  result = writeRule(tool, rule.name, rule.content || "", dryRun);
-                } else if (rule.content) {
-                  // Inline rules — write to .cursorrules with markers
-                  result = writeCursorRules(rule.content, dryRun);
-                } else {
-                  result = writeCursorRules(item.content, dryRun);
-                }
-              } catch {
-                // Plain text content — write to .cursorrules with markers
-                result = writeCursorRules(item.content, dryRun);
-              }
-            } else {
-              // claude-code rules: JSON with name/content
-              try {
-                const rule = JSON.parse(item.content);
-                result = writeRule(tool, rule.name || "unnamed", rule.content || "", dryRun);
-              } catch {
-                result = `  [skip] Invalid rule content`;
-              }
-            }
-            break;
-          }
-          default:
-            result = `  [skip] Unknown config type: ${item.configType}`;
-        }
-        console.log(result);
-      }
-      console.log("");
-    }
-
-    console.log(dryRun ? "No files were modified (dry run)." : "Sync complete.");
+    console.log(dryRun ? "\n[dry-run] Sync preview:\n" : "\nSyncing artifacts...\n");
+    await syncDevice(config, state, dryRun);
+    console.log(dryRun ? "\nDry run complete.\n" : "\nArtifact sync complete.\n");
   } catch (err: any) {
     console.error(`Sync failed: ${err.message}`);
     process.exit(1);
@@ -693,29 +1331,66 @@ switch (command) {
   case "login":
     cmdLogin();
     break;
+  case "logout": {
+    const config = loadConfig();
+    config.token = null;
+    config.email = null;
+    config.orgId = null;
+    config.deviceId = null;
+    saveConfig(config);
+    console.log("\nLogged out.\n");
+    break;
+  }
+  case "device":
+    if (args[1] === "register") {
+      registerDevice(loadConfig())
+        .then((result) => {
+          console.log(`\nRegistered device ${result.device.name} (${result.device.id})\n`);
+        })
+        .catch((error) => {
+          console.error(`Device registration failed: ${error.message}`);
+          process.exit(1);
+        });
+      break;
+    }
+    console.log("\nUsage: pnpm --filter cli lfc device register\n");
+    break;
   case "sync":
+  case "sync-v2":
     cmdSync(dryRun);
     break;
   case "status":
     cmdStatus();
+    break;
+  case "doctor":
+    cmdDoctor();
+    break;
+  case "events":
+    cmdEvents();
     break;
   case "reset":
     resetConfigs(dryRun);
     break;
   default:
     console.log(`
-LFC CLI — sync AI tool configs from your org
+LFC CLI — artifact sync client
 
 Commands:
   login                Login to LFC API
-  sync                 Sync configs to local tool files
+  logout               Clear local auth and device state
+  device register      Register this machine as an LFC device
+  sync                 Sync artifact assignments to local tool files
   sync --dry-run       Preview what would change without writing
-  status               Show detected tools and connection info
+  sync-v2              Alias for sync
+  status               Show detected tools, device, and local state
+  doctor               Check local runtime prerequisites
+  events               Show recent local install events
   reset                Remove all lfc-managed config entries
   reset --dry-run      Preview what would be removed
 
 Usage:
   pnpm --filter cli lfc login
+  pnpm --filter cli lfc device register
   pnpm --filter cli lfc sync --dry-run
   pnpm --filter cli lfc sync
 `);

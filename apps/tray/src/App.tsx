@@ -34,6 +34,7 @@ function getStored() {
     email: localStorage.getItem("lfc_tray_email") || "",
     apiUrl: API_URL,
     orgId: localStorage.getItem("lfc_tray_org_id") || "",
+    deviceId: localStorage.getItem("lfc_tray_device_id") || "",
   };
 }
 
@@ -102,6 +103,27 @@ export default function App() {
     }
   };
 
+  const ensureBrowserDevice = async () => {
+    const { deviceId } = getStored();
+    const data = await apiFetch("/api/devices/register", {
+      method: "POST",
+      body: JSON.stringify({
+        deviceId: deviceId || undefined,
+        name: `browser@${window.location.hostname || "local"}`,
+        platform: navigator.platform || "browser",
+        arch: "unknown",
+        clientKind: "tray-web",
+        clientVersion: "0.1.0",
+        detectedTools: [],
+      }),
+    });
+    const resolvedDeviceId = data.device?.id as string;
+    if (resolvedDeviceId) {
+      localStorage.setItem("lfc_tray_device_id", resolvedDeviceId);
+    }
+    return resolvedDeviceId;
+  };
+
   const handleLogin = async (apiUrl: string, email: string, password: string) => {
     if (isTauri) {
       await tauriInvoke("login", { apiUrl, email, password });
@@ -119,6 +141,7 @@ export default function App() {
     localStorage.setItem("lfc_tray_token", data.token);
     localStorage.setItem("lfc_tray_email", email);
     localStorage.setItem("lfc_tray_org_id", data.user.orgId);
+    localStorage.removeItem("lfc_tray_device_id");
     setState((s) => ({ ...s, loggedIn: true, email, apiUrl }));
     await loadDefaultProfile();
     setPage("onboarding");
@@ -131,6 +154,7 @@ export default function App() {
       localStorage.removeItem("lfc_tray_token");
       localStorage.removeItem("lfc_tray_email");
       localStorage.removeItem("lfc_tray_org_id");
+      localStorage.removeItem("lfc_tray_device_id");
       localStorage.removeItem("lfc_tray_last_sync");
     }
     setState((s) => ({ ...s, loggedIn: false, email: undefined, syncStatus: "idle", syncError: undefined, installedTools: [], syncedConfigs: 0 }));
@@ -153,26 +177,22 @@ export default function App() {
     }
 
     try {
-      const data = await apiFetch("/api/sync", {
+      const deviceId = await ensureBrowserDevice();
+      const data = await apiFetch(`/api/devices/${deviceId}/sync`, {
         method: "POST",
         body: JSON.stringify({
-          installedTools: ["claude-desktop", "claude-code", "cursor", "codex", "windsurf"],
-          currentVersions: {},
+          detectedTools: [],
+          states: [],
+          inventory: [],
         }),
       });
-      const configs = data.configs || [];
-      const tools = new Set<string>();
-      for (const c of configs) {
-        for (const t of c.targetTools || []) tools.add(t);
-      }
       const now = new Date().toISOString();
       localStorage.setItem("lfc_tray_last_sync", now);
       setState((s) => ({
         ...s,
         syncStatus: "synced",
         lastSync: now,
-        syncedConfigs: configs.length,
-        installedTools: Array.from(tools),
+        syncedConfigs: (data.assignments || []).length,
       }));
     } catch (e: any) {
       setState((s) => ({ ...s, syncStatus: "error", syncError: e.message || "Sync failed" }));
@@ -197,9 +217,10 @@ export default function App() {
         if (isTauri) {
           await tauriInvoke("upload_snapshot", { tools: scans });
         } else {
-          await apiFetch("/api/snapshots", {
+          const deviceId = await ensureBrowserDevice();
+          await apiFetch(`/api/devices/${deviceId}/inventory`, {
             method: "POST",
-            body: JSON.stringify({ tools: scans }),
+            body: JSON.stringify({ inventory: scans }),
           });
         }
       } catch (e) {
@@ -208,40 +229,72 @@ export default function App() {
     }
   };
 
-  const buildSuggestionContent = (item: ConfigItem): { configType: string; title: string; content: string } => {
+  const buildSuggestionContent = (item: ConfigItem): { title: string; capture: Record<string, unknown> } => {
     if (item.type === "mcp") {
       return {
-        configType: "mcp",
         title: `Add ${item.name} MCP server`,
-        content: JSON.stringify({ servers: [{ name: item.name, command: item.command, args: item.args, env: {}, _managed_by: "lfc" }] }),
+        capture: {
+          kind: "mcp",
+          name: item.name,
+          tool: "claude-code",
+          serverName: item.name,
+          command: item.command,
+          args: item.args,
+          envKeys: [],
+        },
       };
     }
     return {
-      configType: item.type === "skill" ? "skills" : item.type === "agent" ? "agents" : "rules",
       title: `Add ${item.name} ${item.type}`,
-      content: JSON.stringify({ name: item.name, content: item.preview || "" }),
+      capture: {
+        kind: item.type,
+        name: item.name,
+        tool: "claude-code",
+        content: item.preview || "",
+      },
     };
   };
 
   const handleSuggest = async (toolId: string, item: ConfigItem) => {
     const { orgId } = getStored();
     if (!orgId || !defaultProfileId) return;
-    const { configType, title, content } = buildSuggestionContent(item);
+    const { title, capture } = buildSuggestionContent(item);
 
     if (isTauri) {
       try {
+        const content =
+          item.type === "mcp"
+            ? JSON.stringify({ servers: [{ name: item.name, command: item.command, args: item.args, env: {}, _managed_by: "lfc" }] })
+            : JSON.stringify({ name: item.name, content: item.preview || "" });
+        const configType = item.type === "mcp" ? "mcp" : item.type === "skill" ? "skills" : item.type === "agent" ? "agents" : "rules";
         await tauriInvoke("submit_suggestion", { profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` });
       } catch (e) {
         console.warn("[LFC] Tauri submit_suggestion failed, falling back to API:", e);
-        await apiFetch(`/api/orgs/${orgId}/suggestions`, {
+        await apiFetch(`/api/orgs/${orgId}/submissions`, {
           method: "POST",
-          body: JSON.stringify({ profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` }),
+          body: JSON.stringify({
+            title,
+            description: `From ${toolId}`,
+            capture: {
+              ...capture,
+              tool: toolId,
+              metadata: { profileId: defaultProfileId },
+            },
+          }),
         });
       }
     } else {
-      await apiFetch(`/api/orgs/${orgId}/suggestions`, {
+      await apiFetch(`/api/orgs/${orgId}/submissions`, {
         method: "POST",
-        body: JSON.stringify({ profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` }),
+        body: JSON.stringify({
+          title,
+          description: `From ${toolId}`,
+          capture: {
+            ...capture,
+            tool: toolId,
+            metadata: { profileId: defaultProfileId },
+          },
+        }),
       });
     }
 

@@ -1,3 +1,4 @@
+use crate::artifact_sync;
 use crate::state::{AppState, AppStatus};
 use crate::sync;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,7 @@ pub async fn login(
         config.auth_token = Some(data.token);
         config.email = Some(email);
         config.org_id = Some(data.user.org_id);
+        config.device_id = None;
     }
     state.save_config();
 
@@ -64,6 +66,7 @@ pub fn logout(state: State<'_, AppState>) -> Result<(), String> {
         config.auth_token = None;
         config.email = None;
         config.org_id = None;
+        config.device_id = None;
     }
     state.save_config();
     *state.sync_status.lock().unwrap() = "idle".to_string();
@@ -90,10 +93,10 @@ pub fn get_status(state: State<'_, AppState>) -> AppStatus {
 
 #[tauri::command]
 pub async fn sync_now(state: State<'_, AppState>) -> Result<(), String> {
-    let (api_url, token) = {
+    let (api_url, token, existing_device_id) = {
         let config = state.config.lock().unwrap();
         let token = config.auth_token.clone().ok_or("Not logged in")?;
-        (config.api_url.clone(), token)
+        (config.api_url.clone(), token, config.device_id.clone())
     };
 
     *state.sync_status.lock().unwrap() = "syncing".to_string();
@@ -102,19 +105,17 @@ pub async fn sync_now(state: State<'_, AppState>) -> Result<(), String> {
     let tools = sync::detect_installed_tools();
     *state.installed_tools.lock().unwrap() = tools.clone();
 
-    // Fetch and apply configs
-    match sync::fetch_configs(&api_url, &token, &tools).await {
-        Ok(response) => match sync::apply_sync_response(&response) {
-            Ok(count) => {
-                *state.synced_configs.lock().unwrap() = count;
-                *state.sync_status.lock().unwrap() = "synced".to_string();
-                *state.last_sync.lock().unwrap() = Some(now_millis());
+    match artifact_sync::sync_device(&api_url, &token, existing_device_id).await {
+        Ok(result) => {
+            {
+                let mut config = state.config.lock().unwrap();
+                config.device_id = Some(result.device_id);
             }
-            Err(e) => {
-                *state.sync_status.lock().unwrap() = "error".to_string();
-                return Err(format!("Apply error: {}", e));
-            }
-        },
+            state.save_config();
+            *state.synced_configs.lock().unwrap() = result.applied_count;
+            *state.sync_status.lock().unwrap() = "synced".to_string();
+            *state.last_sync.lock().unwrap() = Some(now_millis());
+        }
         Err(e) => {
             *state.sync_status.lock().unwrap() = "error".to_string();
             return Err(e);
@@ -181,23 +182,27 @@ pub async fn submit_suggestion(
     description: String,
     content: String,
 ) -> Result<(), String> {
-    let (api_url, token, org_id) = {
+    let (api_url, token, org_id, device_id) = {
         let config = state.config.lock().unwrap();
         let token = config.auth_token.clone().ok_or("Not logged in")?;
         let org_id = config.org_id.clone().ok_or("No org ID")?;
-        (config.api_url.clone(), token, org_id)
+        (
+            config.api_url.clone(),
+            token,
+            org_id,
+            config.device_id.clone(),
+        )
     };
 
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{}/api/orgs/{}/suggestions", api_url, org_id))
+        .post(format!("{}/api/orgs/{}/submissions", api_url, org_id))
         .header("Authorization", format!("Bearer {}", token))
         .json(&serde_json::json!({
-            "profileId": profileId,
-            "configType": configType,
             "title": title,
             "description": description,
-            "content": content,
+            "sourceDeviceId": device_id,
+            "capture": build_submission_capture(&profileId, &configType, &content, &description, &title),
         }))
         .send()
         .await
@@ -223,7 +228,7 @@ pub async fn get_my_suggestions(state: State<'_, AppState>) -> Result<Vec<Sugges
 
     let client = reqwest::Client::new();
     let resp = client
-        .get(format!("{}/api/orgs/{}/suggestions", api_url, org_id))
+        .get(format!("{}/api/orgs/{}/submissions", api_url, org_id))
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
@@ -234,11 +239,22 @@ pub async fn get_my_suggestions(state: State<'_, AppState>) -> Result<Vec<Sugges
     }
 
     let body: serde_json::Value = resp.json().await.map_err(|e| format!("Parse error: {}", e))?;
-    let suggestions: Vec<Suggestion> = serde_json::from_value(
-        body.get("suggestions").cloned().unwrap_or(serde_json::json!([]))
-    ).map_err(|e| format!("Parse suggestions error: {}", e))?;
+    let submissions = body
+        .get("submissions")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
 
-    Ok(suggestions)
+    Ok(submissions
+        .into_iter()
+        .map(|submission| Suggestion {
+            id: submission.get("id").and_then(|value| value.as_str()).unwrap_or_default().to_string(),
+            title: submission.get("title").and_then(|value| value.as_str()).unwrap_or("Untitled submission").to_string(),
+            config_type: submission.get("artifactKind").and_then(|value| value.as_str()).unwrap_or("unknown").to_string(),
+            status: submission.get("status").and_then(|value| value.as_str()).unwrap_or("pending").to_string(),
+            created_at: submission.get("createdAt").and_then(|value| value.as_str()).unwrap_or_default().to_string(),
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -275,29 +291,127 @@ pub async fn upload_snapshot(
     state: State<'_, AppState>,
     tools: Vec<sync::ToolScan>,
 ) -> Result<(), String> {
-    let (api_url, token) = {
+    let (api_url, token, existing_device_id) = {
         let config = state.config.lock().unwrap();
         let token = config.auth_token.clone().ok_or("Not logged in")?;
-        (config.api_url.clone(), token)
+        (config.api_url.clone(), token, config.device_id.clone())
     };
 
-    let client = reqwest::Client::new();
-    let resp = client
-        .post(format!("{}/api/snapshots", api_url))
-        .header("Authorization", format!("Bearer {}", token))
-        .json(&serde_json::json!({ "tools": tools }))
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
+    let device_id = artifact_sync::upload_inventory_snapshot(
+        &api_url,
+        &token,
+        existing_device_id,
+        &tools,
+    )
+    .await?;
 
-    if !resp.status().is_success() {
-        let body: serde_json::Value = resp.json().await.unwrap_or_default();
-        let msg = body["error"].as_str().unwrap_or("Failed to upload snapshot");
-        return Err(msg.to_string());
+    {
+        let mut config = state.config.lock().unwrap();
+        config.device_id = Some(device_id);
     }
+    state.save_config();
 
     println!("[LFC] Snapshot uploaded to server");
     Ok(())
+}
+
+fn build_submission_capture(
+    profile_id: &str,
+    config_type: &str,
+    content: &str,
+    description: &str,
+    title: &str,
+) -> serde_json::Value {
+    let source_tool = description
+        .strip_prefix("From ")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "claude-code".to_string());
+
+    match config_type {
+        "mcp" => {
+            let parsed = serde_json::from_str::<serde_json::Value>(content).ok();
+            let server = parsed
+                .as_ref()
+                .and_then(|value| value.get("servers"))
+                .and_then(|value| value.as_array())
+                .and_then(|servers| servers.first());
+            let name = server
+                .and_then(|value| value.get("name"))
+                .and_then(|value| value.as_str())
+                .unwrap_or(title);
+            let command = server
+                .and_then(|value| value.get("command"))
+                .and_then(|value| value.as_str())
+                .unwrap_or_default();
+            let args = server
+                .and_then(|value| value.get("args"))
+                .and_then(|value| value.as_array())
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_str().map(|value| value.to_string()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            let env_keys = server
+                .and_then(|value| value.get("env"))
+                .and_then(|value| value.as_object())
+                .map(|env| env.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default();
+
+            serde_json::json!({
+                "kind": "mcp",
+                "name": name,
+                "tool": source_tool,
+                "serverName": name,
+                "command": command,
+                "args": args,
+                "envKeys": env_keys,
+                "metadata": {
+                    "profileId": profile_id,
+                }
+            })
+        }
+        "skills" | "agents" | "rules" | "instructions" => {
+            let parsed = serde_json::from_str::<serde_json::Value>(content).ok();
+            let kind = match config_type {
+                "skills" => "skill",
+                "agents" => "agent",
+                "rules" => "rule",
+                _ => "instructions",
+            };
+            let name = parsed
+                .as_ref()
+                .and_then(|value| value.get("name"))
+                .and_then(|value| value.as_str())
+                .unwrap_or(title);
+            let normalized_content = parsed
+                .as_ref()
+                .and_then(|value| value.get("content"))
+                .and_then(|value| value.as_str())
+                .unwrap_or(content);
+
+            serde_json::json!({
+                "kind": kind,
+                "name": name,
+                "tool": source_tool,
+                "content": normalized_content,
+                "metadata": {
+                    "profileId": profile_id,
+                }
+            })
+        }
+        _ => serde_json::json!({
+            "kind": "skill",
+            "name": title,
+            "tool": source_tool,
+            "content": content,
+            "metadata": {
+                "profileId": profile_id,
+            }
+        }),
+    }
 }
 
 fn now_millis() -> String {

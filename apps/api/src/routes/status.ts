@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env.js";
-import { authMiddleware } from "../auth.js";
+import { authMiddleware, getUser } from "../auth.js";
 
 const status = new Hono<AppEnv>();
 
@@ -9,71 +9,40 @@ status.use("*", authMiddleware);
 status.get("/", async (c) => {
   const db = c.env.DB;
   const { orgId } = c.req.param() as { orgId: string };
+  const user = getUser(c);
+
+  if (user.orgId !== orgId) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   const members = (
     await db
-      .prepare("SELECT id, email, name, role FROM users WHERE org_id = ?")
-      .bind(orgId)
-      .all<{ id: string; email: string; name: string; role: string }>()
-  ).results;
-
-  const currentVersions = (
-    await db
       .prepare(
-        `SELECT pc.profile_id as profileId, pc.config_type as configType, pc.version
-         FROM profile_configs pc JOIN profiles p ON pc.profile_id = p.id
-         WHERE p.org_id = ?`
+        `SELECT u.id, u.email, u.name, u.role,
+                MAX(d.last_seen_at) as lastSyncAt,
+                COUNT(DISTINCT d.id) as deviceCount,
+                SUM(CASE WHEN ds.actual_state = 'failed' THEN 1 ELSE 0 END) as failedStates,
+                SUM(CASE WHEN ds.actual_state IN ('active', 'config_applied_unverified') THEN 1 ELSE 0 END) as healthyStates
+         FROM users u
+         LEFT JOIN devices d ON d.user_id = u.id
+         LEFT JOIN device_artifact_states ds ON ds.device_id = d.id
+         WHERE u.org_id = ?
+         GROUP BY u.id, u.email, u.name, u.role
+         ORDER BY u.created_at`
       )
       .bind(orgId)
-      .all<{ profileId: string; configType: string; version: number }>()
+      .all<{ id: string; email: string; name: string; role: string; lastSyncAt: string | null; deviceCount: number; failedStates: number | null; healthyStates: number | null }>()
   ).results;
 
-  const currentVersionMap: Record<string, number> = {};
-  for (const cv of currentVersions) {
-    currentVersionMap[`${cv.profileId}:${cv.configType}`] = cv.version;
-  }
-
-  const result = [];
-  for (const member of members) {
-    const syncEvent = await db
-      .prepare(
-        `SELECT id, userId, installedTools, configVersions, syncedAt
-         FROM sync_events WHERE orgId = ? AND userId = ?
-         ORDER BY syncedAt DESC LIMIT 1`
-      )
-      .bind(orgId, member.id)
-      .first<{ id: string; userId: string; installedTools: string | null; configVersions: string | null; syncedAt: string }>();
-
-    let upToDate = false;
-    let installedTools: string[] = [];
-    let configVersions: Record<string, number> = {};
-
-    if (syncEvent) {
-      installedTools = syncEvent.installedTools ? JSON.parse(syncEvent.installedTools) : [];
-      configVersions = syncEvent.configVersions ? JSON.parse(syncEvent.configVersions) : {};
-
-      upToDate = true;
-      for (const [key, version] of Object.entries(currentVersionMap)) {
-        if (configVersions[key] !== version) {
-          upToDate = false;
-          break;
-        }
-      }
-    }
-
-    result.push({
-      id: member.id,
-      email: member.email,
-      name: member.name,
-      role: member.role,
-      lastSyncAt: syncEvent?.syncedAt || null,
-      installedTools,
-      configVersions,
-      upToDate,
-    });
-  }
-
-  return c.json({ members: result });
+  return c.json({
+    members: members.map((member) => ({
+      ...member,
+      deviceCount: Number(member.deviceCount || 0),
+      failedStates: Number(member.failedStates || 0),
+      healthyStates: Number(member.healthyStates || 0),
+      upToDate: Number(member.failedStates || 0) === 0 && Number(member.deviceCount || 0) > 0,
+    })),
+  });
 });
 
 export default status;

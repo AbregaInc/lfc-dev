@@ -1,7 +1,15 @@
-import { useState, useEffect } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+
+import AuthShell from "@/components/AuthShell";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import * as api from "@/lib/api";
+
 import { useAuth } from "../lib/auth";
-import * as api from "../lib/api";
 
 export default function Join() {
   const { code } = useParams<{ code: string }>();
@@ -15,77 +23,154 @@ export default function Join() {
   const [password, setPassword] = useState("");
 
   useEffect(() => {
-    if (code) api.getInvite(code).then(setInvite).catch(() => setError("Invalid invite link"));
+    if (!code) return;
+    api.getInvite(code).then(setInvite).catch(() => setError("Invalid invite link"));
   }, [code]);
 
   const handleJoin = async () => {
     if (!code) return;
-    setLoading(true); setError("");
-    try { await api.acceptInvite(code); navigate("/app"); window.location.reload(); }
-    catch (err: any) { setError(err.message); }
-    finally { setLoading(false); }
+    setLoading(true);
+    setError("");
+
+    try {
+      await api.acceptInvite(code);
+      navigate("/app");
+      window.location.reload();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRegisterAndJoin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true); setError("");
+  const handleRegisterAndJoin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+
     try {
       await register(name, email, password);
       if (code) await api.acceptInvite(code);
-      navigate("/app"); window.location.reload();
-    } catch (err: any) { setError(err.message); }
-    finally { setLoading(false); }
+      navigate("/app");
+      window.location.reload();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (error && !invite) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--color-surface-sunken)" }}>
-        <div className="card max-w-[380px] w-full p-8 text-center">
-          <h1 className="page-title mb-2">Invalid invite</h1>
-          <p className="text-[14px] mb-4" style={{ color: "var(--color-text-tertiary)" }}>{error}</p>
-          <Link to="/login" className="text-[13px] font-medium" style={{ color: "var(--color-text-primary)" }}>Go to login</Link>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+        <Card className="w-full max-w-md py-0">
+          <CardContent className="space-y-4 py-8 text-center">
+            <div className="text-2xl font-semibold tracking-tight text-foreground">
+              Invalid invite
+            </div>
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <Link to="/login" className="text-sm font-medium text-foreground underline">
+              Go to login
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--color-surface-sunken)" }}>
-      <div className="w-full max-w-[380px] px-4">
-        <div className="text-center mb-8">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold mx-auto mb-4" style={{ background: "var(--color-text-primary)", color: "var(--color-text-inverse)" }}>LF</div>
-          <h1 className="text-[22px] font-semibold" style={{ letterSpacing: "-0.02em", color: "var(--color-text-primary)" }}>
-            Join {invite?.invite?.orgName || "organization"}
-          </h1>
-          <p className="text-[14px] mt-1.5" style={{ color: "var(--color-text-tertiary)" }}>You've been invited to an LFC org.</p>
-        </div>
-
-        <div className="card p-6">
-          {error && (
-            <div className="p-3 rounded-lg text-[13px] mb-4" style={{ background: "var(--color-danger-subtle)", color: "var(--color-danger)" }}>{error}</div>
-          )}
+    <AuthShell
+      eyebrow="Team invite"
+      title={`Join ${invite?.invite?.orgName || "organization"}`}
+      description="This link will attach your account to the organization and bring you straight into the rollout dashboard."
+      highlights={[
+        {
+          label: "Profiles",
+          title: "Assignments stay team-scoped",
+          detail: "You inherit the org and can be targeted through profiles instead of local setup docs.",
+        },
+        {
+          label: "Fleet",
+          title: "Your devices report health back",
+          detail: "Tray and CLI clients show verification state once they register.",
+        },
+        {
+          label: "Security",
+          title: "Secrets stay managed",
+          detail: "Shared launches resolve org secrets without distributing raw credentials by hand.",
+        },
+      ]}
+      footer={
+        !user ? (
+          <span>
+            Already have an account?{" "}
+            <Link to="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+              Sign in
+            </Link>
+          </span>
+        ) : (
+          <span>Signed in as {user.email}</span>
+        )
+      }
+    >
+      <Card className="py-0">
+        <CardContent className="space-y-4 py-6 md:py-7">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
 
           {user ? (
-            <div className="text-center">
-              <p className="text-[14px] mb-4" style={{ color: "var(--color-text-secondary)" }}>Signed in as <strong>{user.email}</strong></p>
-              <button onClick={handleJoin} disabled={loading} className="btn-primary w-full">{loading ? "Joining..." : "Join organization"}</button>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Signed in as <strong>{user.email}</strong>.
+              </p>
+              <Button onClick={handleJoin} disabled={loading} className="w-full">
+                {loading ? "Joining..." : "Join organization"}
+              </Button>
             </div>
           ) : (
             <form onSubmit={handleRegisterAndJoin} className="space-y-4">
-              <div><label className="label">Name</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="input-base" required /></div>
-              <div><label className="label">Email</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-base" required /></div>
-              <div><label className="label">Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-base" required /></div>
-              <button type="submit" disabled={loading} className="btn-primary w-full" style={{ marginTop: "20px" }}>{loading ? "Creating account..." : "Create account & join"}</button>
+              <div>
+                <Label htmlFor="join-name">Name</Label>
+                <Input
+                  id="join-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="mt-2"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="join-email">Email</Label>
+                <Input
+                  id="join-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="mt-2"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="join-password">Password</Label>
+                <Input
+                  id="join-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="mt-2"
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? "Creating account..." : "Create account and join"}
+              </Button>
             </form>
           )}
-        </div>
-
-        {!user && (
-          <p className="mt-5 text-center text-[13px]" style={{ color: "var(--color-text-tertiary)" }}>
-            Already have an account? <Link to="/login" className="font-medium" style={{ color: "var(--color-text-primary)" }}>Sign in</Link>
-          </p>
-        )}
-      </div>
-    </div>
+        </CardContent>
+      </Card>
+    </AuthShell>
   );
 }

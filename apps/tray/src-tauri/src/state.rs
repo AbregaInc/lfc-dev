@@ -13,6 +13,8 @@ pub struct AppConfig {
     pub email: Option<String>,
     #[serde(alias = "org_id")]
     pub org_id: Option<String>,
+    #[serde(alias = "device_id")]
+    pub device_id: Option<String>,
     #[serde(alias = "sync_interval")]
     pub sync_interval: u64,
 }
@@ -24,6 +26,7 @@ impl Default for AppConfig {
             auth_token: None,
             email: None,
             org_id: None,
+            device_id: None,
             sync_interval: 7200,
         }
     }
