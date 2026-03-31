@@ -2,12 +2,33 @@ import { useState, useEffect } from "react";
 import { API_URL } from "./config";
 import Login from "./pages/Login";
 import Status from "./pages/Status";
-import Onboarding, { type ToolScan } from "./pages/Onboarding";
+import Onboarding from "./pages/Onboarding";
+import type { ToolScan } from "./lib/toolScan";
 
 type Page = "login" | "status" | "onboarding";
 
-type ConfigItem = { type: "mcp"; name: string; command: string; args: string[]; managed: boolean }
-  | { type: "skill" | "rule" | "agent"; name: string; managed: boolean; preview: string };
+type ConfigItem =
+  | {
+      type: "mcp";
+      name: string;
+      command: string;
+      args: string[];
+      managed: boolean;
+      scope?: string;
+      supportedTools?: string[];
+      path?: string;
+      distributionScope?: "shared" | "tool";
+    }
+  | {
+      type: "skill" | "rule" | "agent";
+      name: string;
+      managed: boolean;
+      preview: string;
+      scope?: string;
+      supportedTools?: string[];
+      path?: string;
+      distributionScope?: "shared" | "tool";
+    };
 
 interface AppState {
   loggedIn: boolean;
@@ -26,6 +47,31 @@ const isTauri = !!(window as any).__TAURI__;
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/tauri");
   return invoke<T>(cmd, args);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
+
+async function tauriInvokeWithTimeout<T>(
+  cmd: string,
+  args: Record<string, unknown> | undefined,
+  timeoutMs: number,
+  message: string
+): Promise<T> {
+  return withTimeout(tauriInvoke<T>(cmd, args), timeoutMs, message);
 }
 
 function getStored() {
@@ -67,7 +113,12 @@ export default function App() {
   const loadStatus = async () => {
     if (isTauri) {
       try {
-        const status = await tauriInvoke<AppState>("get_status");
+        const status = await tauriInvokeWithTimeout<AppState>(
+          "get_status",
+          undefined,
+          5000,
+          "Tray status check timed out"
+        );
         setState(status);
         if (!status.loggedIn) {
           setPage("login");
@@ -126,7 +177,12 @@ export default function App() {
 
   const handleLogin = async (apiUrl: string, email: string, password: string) => {
     if (isTauri) {
-      await tauriInvoke("login", { apiUrl, email, password });
+      await tauriInvokeWithTimeout(
+        "login",
+        { apiUrl, email, password },
+        15000,
+        "Tray login timed out. Check the local API URL and try again."
+      );
       await loadStatus();
       await loadDefaultProfile();
       return;
@@ -167,7 +223,12 @@ export default function App() {
 
     if (isTauri) {
       try {
-        await tauriInvoke("sync_now");
+        await tauriInvokeWithTimeout(
+          "sync_now",
+          undefined,
+          30000,
+          "Initial sync timed out. Check that the local server is reachable and retry."
+        );
         await loadStatus();
       } catch (e: any) {
         const msg = typeof e === "string" ? e : e.message || "Sync failed";
@@ -201,7 +262,14 @@ export default function App() {
 
   const handleSaveSyncInterval = async (syncInterval: number) => {
     if (isTauri) {
-      try { await tauriInvoke("save_settings", { apiUrl: API_URL, syncInterval }); } catch {}
+      try {
+        await tauriInvokeWithTimeout(
+          "save_settings",
+          { apiUrl: API_URL, syncInterval },
+          5000,
+          "Saving tray settings timed out"
+        );
+      } catch {}
     }
     setState((s) => ({ ...s, syncInterval }));
   };
@@ -209,13 +277,23 @@ export default function App() {
   const handleScanTools = async () => {
     let scans: ToolScan[] = [];
     if (isTauri) {
-      scans = await tauriInvoke<ToolScan[]>("scan_tools");
+      scans = await tauriInvokeWithTimeout<ToolScan[]>(
+        "scan_tools",
+        undefined,
+        15000,
+        "Tool detection timed out. Close the tray and try again."
+      );
     }
     setToolScans(scans);
     if (scans.length > 0) {
       try {
         if (isTauri) {
-          await tauriInvoke("upload_snapshot", { tools: scans });
+          await tauriInvokeWithTimeout(
+            "upload_snapshot",
+            { tools: scans },
+            15000,
+            "Inventory upload timed out"
+          );
         } else {
           const deviceId = await ensureBrowserDevice();
           await apiFetch(`/api/devices/${deviceId}/inventory`, {
@@ -229,28 +307,45 @@ export default function App() {
     }
   };
 
-  const buildSuggestionContent = (item: ConfigItem): { title: string; capture: Record<string, unknown> } => {
+  const buildSuggestionContent = (
+    toolId: string,
+    item: ConfigItem
+  ): { title: string; capture: Record<string, unknown> } => {
+    const supportedTools =
+      item.supportedTools && item.supportedTools.length > 0 ? item.supportedTools : [toolId];
+    const sourceTool =
+      toolId === "shared" ? supportedTools[0] || "claude-code" : toolId;
+
     if (item.type === "mcp") {
       return {
         title: `Add ${item.name} MCP server`,
         capture: {
           kind: "mcp",
           name: item.name,
-          tool: "claude-code",
+          tool: sourceTool,
+          supportedTools,
           serverName: item.name,
           command: item.command,
           args: item.args,
           envKeys: [],
+          path: item.path,
+          scope: item.scope,
+          distributionScope: item.distributionScope,
         },
       };
     }
+
     return {
       title: `Add ${item.name} ${item.type}`,
       capture: {
         kind: item.type,
         name: item.name,
-        tool: "claude-code",
+        tool: sourceTool,
+        supportedTools,
         content: item.preview || "",
+        path: item.path,
+        scope: item.scope,
+        distributionScope: item.distributionScope,
       },
     };
   };
@@ -258,7 +353,7 @@ export default function App() {
   const handleSuggest = async (toolId: string, item: ConfigItem) => {
     const { orgId } = getStored();
     if (!orgId || !defaultProfileId) return;
-    const { title, capture } = buildSuggestionContent(item);
+    const { title, capture } = buildSuggestionContent(toolId, item);
 
     if (isTauri) {
       try {
@@ -267,7 +362,14 @@ export default function App() {
             ? JSON.stringify({ servers: [{ name: item.name, command: item.command, args: item.args, env: {}, _managed_by: "lfc" }] })
             : JSON.stringify({ name: item.name, content: item.preview || "" });
         const configType = item.type === "mcp" ? "mcp" : item.type === "skill" ? "skills" : item.type === "agent" ? "agents" : "rules";
-        await tauriInvoke("submit_suggestion", { profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` });
+        await tauriInvoke("submit_suggestion", {
+          profileId: defaultProfileId,
+          configType,
+          title,
+          content,
+          description: `From ${toolId}`,
+          capture,
+        });
       } catch (e) {
         console.warn("[LFC] Tauri submit_suggestion failed, falling back to API:", e);
         await apiFetch(`/api/orgs/${orgId}/submissions`, {

@@ -46,9 +46,11 @@
     "windows": [
       {
         "title": "LFC - Looking For Config",
-        "width": 380,
-        "height": 500,
-        "resizable": false,
+        "width": 400,
+        "height": 560,
+        "minWidth": 380,
+        "minHeight": 500,
+        "resizable": true,
         "visible": false,
         "decorations": true
       }

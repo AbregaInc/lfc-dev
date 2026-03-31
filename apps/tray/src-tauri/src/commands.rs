@@ -2,7 +2,16 @@ use crate::artifact_sync;
 use crate::state::{AppState, AppStatus};
 use crate::sync;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tauri::State;
+
+fn http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))
+}
 
 #[derive(Deserialize)]
 pub struct LoginResponse {
@@ -23,7 +32,7 @@ pub async fn login(
     email: String,
     password: String,
 ) -> Result<(), String> {
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let resp = client
         .post(format!("{}/api/auth/login", apiUrl))
         .json(&serde_json::json!({ "email": email, "password": password }))
@@ -181,6 +190,7 @@ pub async fn submit_suggestion(
     title: String,
     description: String,
     content: String,
+    capture: Option<serde_json::Value>,
 ) -> Result<(), String> {
     let (api_url, token, org_id, device_id) = {
         let config = state.config.lock().unwrap();
@@ -194,7 +204,7 @@ pub async fn submit_suggestion(
         )
     };
 
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let resp = client
         .post(format!("{}/api/orgs/{}/submissions", api_url, org_id))
         .header("Authorization", format!("Bearer {}", token))
@@ -202,7 +212,7 @@ pub async fn submit_suggestion(
             "title": title,
             "description": description,
             "sourceDeviceId": device_id,
-            "capture": build_submission_capture(&profileId, &configType, &content, &description, &title),
+            "capture": capture.unwrap_or_else(|| build_submission_capture(&profileId, &configType, &content, &description, &title)),
         }))
         .send()
         .await
@@ -226,7 +236,7 @@ pub async fn get_my_suggestions(state: State<'_, AppState>) -> Result<Vec<Sugges
         (config.api_url.clone(), token, org_id)
     };
 
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let resp = client
         .get(format!("{}/api/orgs/{}/submissions", api_url, org_id))
         .header("Authorization", format!("Bearer {}", token))
@@ -266,7 +276,7 @@ pub async fn get_profiles(state: State<'_, AppState>) -> Result<Vec<Profile>, St
         (config.api_url.clone(), token, org_id)
     };
 
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let resp = client
         .get(format!("{}/api/orgs/{}/profiles", api_url, org_id))
         .header("Authorization", format!("Bearer {}", token))
