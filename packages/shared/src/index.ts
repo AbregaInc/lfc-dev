@@ -39,6 +39,7 @@ export type InstallStrategy =
 export type ArtifactReleaseStatus = "draft" | "approved" | "deprecated" | "archived";
 
 export type BindingType = "instructions" | "rule" | "agent" | "skill" | "mcp" | "plugin";
+export type BindingScope = "user" | "project";
 
 export type RolloutStrategy = "all_at_once" | "canary" | "phased";
 
@@ -98,6 +99,38 @@ export const FILE_MAP: ToolPath[] = [
     bindingType: "skill",
     mac: "~/.claude/skills/",
     windows: "~/.claude/skills/",
+    format: "directory",
+    scope: "user",
+  },
+  {
+    tool: "codex",
+    bindingType: "skill",
+    mac: "~/.codex/skills/",
+    windows: "~/.codex/skills/",
+    format: "directory",
+    scope: "user",
+  },
+  {
+    tool: "cursor",
+    bindingType: "skill",
+    mac: "~/.cursor/skills/",
+    windows: "~/.cursor/skills/",
+    format: "directory",
+    scope: "user",
+  },
+  {
+    tool: "windsurf",
+    bindingType: "skill",
+    mac: "~/.codeium/windsurf/skills/",
+    windows: "~/.codeium/windsurf/skills/",
+    format: "directory",
+    scope: "user",
+  },
+  {
+    tool: "opencode",
+    bindingType: "skill",
+    mac: "~/.opencode/skills/",
+    windows: "~/.opencode/skills/",
     format: "directory",
     scope: "user",
   },
@@ -213,6 +246,7 @@ export interface ArtifactBinding {
   artifactReleaseId: string;
   tool: Tool;
   bindingType: BindingType;
+  scope?: BindingScope;
   targetPath?: string | null;
   configTemplate?: string | null;
   configJson?: Record<string, unknown> | null;
@@ -267,6 +301,7 @@ export interface ArtifactManifest {
   bindings: Array<{
     tool: Tool;
     bindingType: BindingType;
+    scope?: BindingScope;
     targetPath?: string;
     configTemplate?: string;
     configJson?: Record<string, unknown>;

@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import * as api from "@/lib/api";
-import { reliabilityTone, TOOL_OPTIONS } from "@/lib/dashboard";
+import { manifestBindingBadges, reliabilityTone, TOOL_OPTIONS } from "@/lib/dashboard";
 
 import { useAuth } from "../lib/auth";
 
@@ -211,11 +211,11 @@ export default function ProfileDetail() {
                         v{item.release.version} · {item.release.sourceType} ·{" "}
                         {item.release.sourceRef}
                       </div>
-                      {(item.release.manifest.compatibility.tools || []).length > 0 ? (
+                      {manifestBindingBadges(item.release.manifest).length > 0 ? (
                         <div className="flex flex-wrap gap-2">
-                          {item.release.manifest.compatibility.tools.map((tool) => (
-                            <StatusBadge key={tool} tone="neutral">
-                              {tool}
+                          {manifestBindingBadges(item.release.manifest).map((badge) => (
+                            <StatusBadge key={badge} tone="neutral">
+                              {badge}
                             </StatusBadge>
                           ))}
                         </div>
@@ -284,6 +284,15 @@ export default function ProfileDetail() {
                         <div className="text-sm font-mono text-muted-foreground">
                           v{release.version} · {release.sourceType} · {release.sourceRef}
                         </div>
+                        {manifestBindingBadges(release.manifest).length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {manifestBindingBadges(release.manifest).map((badge) => (
+                              <StatusBadge key={badge} tone="neutral">
+                                {badge}
+                              </StatusBadge>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <Button
                         variant={assigned ? "outline" : "default"}

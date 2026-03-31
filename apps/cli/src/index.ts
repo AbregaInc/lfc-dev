@@ -182,6 +182,12 @@ function detectTools(): DetectedTool[] {
       configPath: path.join(home, ".codeium/windsurf/mcp_config.json"),
       exists: fs.existsSync(path.join(home, ".codeium/windsurf")),
     },
+    {
+      name: "OpenCode",
+      id: "opencode",
+      configPath: path.join(home, ".opencode"),
+      exists: fs.existsSync(path.join(home, ".opencode")),
+    },
   ];
   return tools;
 }
@@ -376,6 +382,69 @@ const MCP_PATHS: Record<string, (home: string) => string> = {
   windsurf: (h) => path.join(h, ".codeium/windsurf/mcp_config.json"),
   codex: (h) => path.join(h, ".codex/mcp.json"),
 };
+
+const SKILL_TOOL_PATHS: Record<string, (home: string) => string> = {
+  "claude-code": (h) => path.join(h, ".claude/skills"),
+  codex: (h) => path.join(h, ".codex/skills"),
+  cursor: (h) => path.join(h, ".cursor/skills"),
+  windsurf: (h) => path.join(h, ".codeium/windsurf/skills"),
+  opencode: (h) => path.join(h, ".opencode/skills"),
+};
+
+function sharedSkillsDir() {
+  return path.join(os.homedir(), ".agents/skills");
+}
+
+function managedSkillName(name: string) {
+  return `lfc-${name}`;
+}
+
+function managedSkillRoot(name: string) {
+  return path.join(sharedSkillsDir(), managedSkillName(name));
+}
+
+function managedSkillFile(name: string) {
+  return path.join(managedSkillRoot(name), "SKILL.md");
+}
+
+function skillEntryIsManaged(entryPath: string) {
+  try {
+    const stat = fs.lstatSync(entryPath);
+    if (stat.isSymbolicLink()) {
+      const resolved = fs.realpathSync(entryPath);
+      return resolved.startsWith(sharedSkillsDir());
+    }
+    if (stat.isDirectory()) {
+      return fs.readFileSync(path.join(entryPath, "SKILL.md"), "utf-8").includes("<!-- managed_by: lfc -->");
+    }
+    return fs.readFileSync(entryPath, "utf-8").includes("<!-- managed_by: lfc -->");
+  } catch {
+    return false;
+  }
+}
+
+function ensureSkillSymlink(target: string, linkPath: string, dryRun: boolean) {
+  try {
+    const stat = fs.lstatSync(linkPath);
+    if (stat) {
+      if (!skillEntryIsManaged(linkPath)) {
+        throw new Error(`Managed skill link ${linkPath} already exists but is not owned by LFC`);
+      }
+      if (fs.realpathSync(linkPath) === target) {
+        return;
+      }
+      if (!dryRun) {
+        fs.rmSync(linkPath, { recursive: true, force: true });
+      }
+    }
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+
+  if (dryRun) return;
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+  fs.symlinkSync(target, linkPath, "dir");
+}
 
 /**
  * Write MCP config for a specific tool.
@@ -614,43 +683,53 @@ function writeRule(toolId: string, name: string, content: string, dryRun: boolea
 }
 
 /**
- * Write skill files.
- * SAFETY: Uses lfc- prefix for managed skills. Never overwrites user skills.
+ * Write skills into the shared global registry and fan them out into tool skill dirs.
+ * SAFETY: Uses lfc- prefix, shared roots, and symlinks. Never overwrites user skills.
  */
 function writeSkill(toolId: string, name: string, content: string, dryRun: boolean): string {
-  const home = os.homedir();
-  if (toolId !== "claude-code") return `  [skip] Skills not supported for: ${toolId}`;
+  const skillsDir = SKILL_TOOL_PATHS[toolId]?.(os.homedir());
+  if (!skillsDir) return `  [skip] Skills not supported for: ${toolId}`;
 
-  const skillsDir = path.join(home, ".claude/skills");
-  const skillDir = path.join(skillsDir, `lfc-${name}`);
-  const skillPath = path.join(skillDir, "SKILL.md");
+  const skillDir = managedSkillRoot(name);
+  const skillPath = managedSkillFile(name);
+  const linkPath = path.join(skillsDir, managedSkillName(name));
   const managedContent = `<!-- managed_by: lfc -->\n${content}`;
 
-  // Check if user has a skill with the same name
-  const userSkillDir = path.join(skillsDir, name);
-  const userSkillFile = path.join(skillsDir, `${name}.md`);
-  if (fs.existsSync(userSkillDir) || fs.existsSync(userSkillFile)) {
-    const isOurs = fs.existsSync(userSkillDir)
-      ? fs.readFileSync(path.join(userSkillDir, "SKILL.md"), "utf-8").includes("<!-- managed_by: lfc -->")
-      : fs.readFileSync(userSkillFile, "utf-8").includes("<!-- managed_by: lfc -->");
-    if (!isOurs) {
-      console.log(`  [info] Skill '${name}' exists as user-owned — using lfc-${name} prefix`);
-    }
+  if (fs.existsSync(skillDir) && !skillEntryIsManaged(skillDir)) {
+    return `  [SAFETY ABORT] Shared skill root ${skillDir} exists but is not owned by LFC`;
   }
 
   if (dryRun) {
-    return `  ${skillPath}\n    content: ${content.split("\n").length} lines`;
+    return `  ${skillPath}\n    shared root: ${skillDir}\n    link: ${linkPath}\n    content: ${content.split("\n").length} lines`;
   }
 
   fs.mkdirSync(skillDir, { recursive: true });
-  backupFile(skillPath);
-  fs.writeFileSync(skillPath, managedContent);
-  return `  ${skillPath} (written)`;
+  if (!fs.existsSync(skillPath) || fs.readFileSync(skillPath, "utf-8") !== managedContent) {
+    backupFile(skillPath);
+    fs.writeFileSync(skillPath, managedContent);
+  }
+  ensureSkillSymlink(skillDir, linkPath, dryRun);
+  return `  ${linkPath} -> ${skillDir}`;
 }
 
-function removeManagedSkills(desiredNames: Set<string>, dryRun: boolean): string[] {
-  const skillsDir = path.join(os.homedir(), ".claude/skills");
+function removeManagedSkillRoots(desiredNames: Set<string>, dryRun: boolean): string[] {
+  const skillsDir = sharedSkillsDir();
   if (!fs.existsSync(skillsDir)) return [];
+  const removed: string[] = [];
+  for (const entry of fs.readdirSync(skillsDir)) {
+    if (!entry.startsWith("lfc-")) continue;
+    const logicalName = entry.replace(/^lfc-/, "").replace(/\.md$/, "");
+    if (desiredNames.has(logicalName)) continue;
+    const target = path.join(skillsDir, entry);
+    removed.push(target);
+    if (!dryRun) fs.rmSync(target, { recursive: true, force: true });
+  }
+  return removed;
+}
+
+function removeManagedSkillLinks(toolId: string, desiredNames: Set<string>, dryRun: boolean): string[] {
+  const skillsDir = SKILL_TOOL_PATHS[toolId]?.(os.homedir());
+  if (!skillsDir || !fs.existsSync(skillsDir)) return [];
   const removed: string[] = [];
   for (const entry of fs.readdirSync(skillsDir)) {
     if (!entry.startsWith("lfc-")) continue;
@@ -753,18 +832,31 @@ function resetConfigs(dryRun: boolean) {
     }
   }
 
-  // Remove lfc-managed skills (only lfc- prefixed dirs)
-  const skillsDir = path.join(home, ".claude/skills");
-  if (fs.existsSync(skillsDir)) {
+  // Remove lfc-managed skills from shared roots and all supported tool links.
+  const skillRootsDir = sharedSkillsDir();
+  if (fs.existsSync(skillRootsDir)) {
+    try {
+      for (const entry of fs.readdirSync(skillRootsDir)) {
+        if (!entry.startsWith("lfc-")) continue;
+        const skillPath = path.join(skillRootsDir, entry);
+        if (!dryRun) {
+          fs.rmSync(skillPath, { recursive: true, force: true });
+        }
+        console.log(`  ${skillPath}: removed`);
+      }
+    } catch {}
+  }
+  for (const toolPath of Object.values(SKILL_TOOL_PATHS)) {
+    const skillsDir = toolPath(home);
+    if (!fs.existsSync(skillsDir)) continue;
     try {
       for (const entry of fs.readdirSync(skillsDir)) {
-        if (entry.startsWith("lfc-")) {
-          const skillPath = path.join(skillsDir, entry);
-          if (!dryRun) {
-            fs.rmSync(skillPath, { recursive: true });
-          }
-          console.log(`  ${skillPath}: removed`);
+        if (!entry.startsWith("lfc-")) continue;
+        const skillPath = path.join(skillsDir, entry);
+        if (!dryRun) {
+          fs.rmSync(skillPath, { recursive: true, force: true });
         }
+        console.log(`  ${skillPath}: removed`);
       }
     } catch {}
   }
@@ -1059,7 +1151,8 @@ async function applyAssignments(assignments: SyncAssignment[], removals: string[
   const instructionsByTool = new Map<string, string[]>();
   const inlineRulesByTool = new Map<string, string[]>();
   const mcpServersByTool = new Map<string, McpServer[]>();
-  const desiredSkills = new Set<string>();
+  const desiredSkillRoots = new Set<string>();
+  const desiredSkillsByTool = new Map<string, Set<string>>();
   const desiredAgents = new Set<string>();
   const desiredClaudeRules = new Set<string>();
   const desiredCursorRules = new Set<string>();
@@ -1110,7 +1203,10 @@ async function applyAssignments(assignments: SyncAssignment[], removals: string[
           });
           mcpServersByTool.set(binding.tool, servers);
         } else if (binding.bindingType === "skill") {
-          desiredSkills.add(assignment.artifact.slug);
+          desiredSkillRoots.add(assignment.artifact.slug);
+          const desiredForTool = desiredSkillsByTool.get(binding.tool) || new Set<string>();
+          desiredForTool.add(assignment.artifact.slug);
+          desiredSkillsByTool.set(binding.tool, desiredForTool);
           console.log(writeSkill(binding.tool, assignment.artifact.slug, bindingContent, dryRun));
         } else if (binding.bindingType === "agent") {
           desiredAgents.add(assignment.artifact.slug);
@@ -1162,13 +1258,15 @@ async function applyAssignments(assignments: SyncAssignment[], removals: string[
     }
   }
 
-  const removedSkills = removeManagedSkills(desiredSkills, dryRun);
+  const removedSkillRoots = removeManagedSkillRoots(desiredSkillRoots, dryRun);
+  const removedSkillLinks = ["claude-code", "codex", "cursor", "windsurf", "opencode"]
+    .flatMap((toolId) => removeManagedSkillLinks(toolId, desiredSkillsByTool.get(toolId) || new Set<string>(), dryRun));
   const removedAgents = removeManagedAgents(desiredAgents, dryRun);
   const removedClaudeRules = removeManagedRules("claude-code", desiredClaudeRules, dryRun);
   const removedCursorRules = removeManagedRules("cursor", desiredCursorRules, dryRun);
   const removedInstalls = cleanupArtifactInstalls(new Set(assignments.map((assignment) => assignment.release.id)), dryRun);
 
-  for (const removed of [...removedSkills, ...removedAgents, ...removedClaudeRules, ...removedCursorRules, ...removedInstalls]) {
+  for (const removed of [...removedSkillRoots, ...removedSkillLinks, ...removedAgents, ...removedClaudeRules, ...removedCursorRules, ...removedInstalls]) {
     console.log(`  [cleanup] ${removed}`);
   }
 

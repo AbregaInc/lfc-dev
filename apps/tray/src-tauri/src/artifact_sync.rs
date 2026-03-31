@@ -6,6 +6,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -337,6 +338,14 @@ fn run_command(command: &str, args: &[&str], cwd: Option<&Path>) -> Result<Strin
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+fn http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))
+}
+
 fn find_python_command() -> Option<String> {
     for candidate in ["python3", "python"] {
         if run_command(candidate, &["--version"], None).is_ok() {
@@ -556,7 +565,7 @@ async fn install_binary_download(assignment: &SyncAssignment) -> Result<InstallR
     );
     ensure_dir(binary_path.parent().unwrap_or(&root))?;
     ensure_dir(&bin_dir())?;
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let bytes = client
         .get(url)
         .send()
@@ -740,8 +749,51 @@ fn has_managed_markdown_block(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn remove_managed_skills(desired: &HashSet<String>) -> Result<Vec<String>, String> {
-    let skills_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".claude/skills");
+fn shared_skills_dir() -> PathBuf {
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".agents/skills")
+}
+
+fn tool_skills_dir(tool: &str) -> Option<PathBuf> {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    match tool {
+        "claude-code" => Some(home.join(".claude/skills")),
+        "codex" => Some(home.join(".codex/skills")),
+        "cursor" => Some(home.join(".cursor/skills")),
+        "windsurf" => Some(home.join(".codeium/windsurf/skills")),
+        "opencode" => Some(home.join(".opencode/skills")),
+        _ => None,
+    }
+}
+
+fn remove_managed_skill_roots(desired: &HashSet<String>) -> Result<Vec<String>, String> {
+    let skills_dir = shared_skills_dir();
+    if !skills_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut removed = Vec::new();
+    for entry in fs::read_dir(skills_dir).map_err(|e| format!("Read skills dir error: {}", e))? {
+        let path = entry.map_err(|e| format!("Read skills entry error: {}", e))?.path();
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if !name.starts_with("lfc-") {
+            continue;
+        }
+        let logical = name.trim_start_matches("lfc-").trim_end_matches(".md").to_string();
+        if desired.contains(&logical) {
+            continue;
+        }
+        removed.push(path.to_string_lossy().to_string());
+        fs::remove_dir_all(&path).or_else(|_| fs::remove_file(&path)).ok();
+    }
+    Ok(removed)
+}
+
+fn remove_managed_skill_links(tool: &str, desired: &HashSet<String>) -> Result<Vec<String>, String> {
+    let Some(skills_dir) = tool_skills_dir(tool) else {
+        return Ok(Vec::new());
+    };
     if !skills_dir.exists() {
         return Ok(Vec::new());
     }
@@ -850,7 +902,8 @@ async fn apply_assignments(assignments: &[SyncAssignment], removals: &[String], 
     let mut instructions_by_tool: HashMap<String, Vec<String>> = HashMap::new();
     let mut cursor_inline_rules: Vec<String> = Vec::new();
     let mut mcp_by_tool: HashMap<String, Vec<sync::McpServer>> = HashMap::new();
-    let mut desired_skills = HashSet::new();
+    let mut desired_skill_roots = HashSet::new();
+    let mut desired_skills_by_tool: HashMap<String, HashSet<String>> = HashMap::new();
     let mut desired_agents = HashSet::new();
     let mut desired_claude_rules = HashSet::new();
     let mut desired_cursor_rules = HashSet::new();
@@ -913,7 +966,11 @@ async fn apply_assignments(assignments: &[SyncAssignment], removals: &[String], 
                             sync::write_rules(&binding.tool, &assignment.artifact.slug, &content)?;
                         }
                         "skill" => {
-                            desired_skills.insert(assignment.artifact.slug.clone());
+                            desired_skill_roots.insert(assignment.artifact.slug.clone());
+                            desired_skills_by_tool
+                                .entry(binding.tool.clone())
+                                .or_default()
+                                .insert(assignment.artifact.slug.clone());
                             sync::write_skills(&binding.tool, &assignment.artifact.slug, &content)?;
                         }
                         "agent" => {
@@ -1034,7 +1091,11 @@ async fn apply_assignments(assignments: &[SyncAssignment], removals: &[String], 
         }
     }
 
-    let _ = remove_managed_skills(&desired_skills)?;
+    let _ = remove_managed_skill_roots(&desired_skill_roots)?;
+    for tool in ["claude-code", "codex", "cursor", "windsurf", "opencode"] {
+        let desired = desired_skills_by_tool.get(tool).cloned().unwrap_or_default();
+        let _ = remove_managed_skill_links(tool, &desired)?;
+    }
     let _ = remove_managed_agents(&desired_agents)?;
     let _ = remove_managed_rules("claude-code", &desired_claude_rules)?;
     let _ = remove_managed_rules("cursor", &desired_cursor_rules)?;
@@ -1060,7 +1121,7 @@ async fn apply_assignments(assignments: &[SyncAssignment], removals: &[String], 
 pub async fn sync_device(api_url: &str, token: &str, existing_device_id: Option<String>) -> Result<SyncRunResult, String> {
     let scans = sync::scan_tools_detailed();
     let register_response = register_device(api_url, token, existing_device_id, &scans).await?;
-    let client = reqwest::Client::new();
+    let client = http_client()?;
 
     let mut local_state = load_local_state();
     let sync_response = client
@@ -1177,7 +1238,7 @@ async fn register_device(
     existing_device_id: Option<String>,
     scans: &[sync::ToolScan],
 ) -> Result<DeviceRegistrationResponse, String> {
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let response = client
         .post(format!("{}/api/devices/register", api_url))
         .header("Authorization", format!("Bearer {}", token))
@@ -1211,7 +1272,7 @@ pub async fn upload_inventory_snapshot(
     scans: &[sync::ToolScan],
 ) -> Result<String, String> {
     let register_response = register_device(api_url, token, existing_device_id, scans).await?;
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let response = client
         .post(format!(
             "{}/api/devices/{}/inventory",

@@ -1,4 +1,4 @@
-import type { Device, ReliabilityTier } from "@/lib/api";
+import type { ArtifactManifest, BindingScope, Device, ReliabilityTier } from "@/lib/api";
 import type { StatusTone } from "@/components/StatusBadge";
 
 export const TOOL_OPTIONS = [
@@ -13,6 +13,77 @@ export const TOOL_OPTIONS = [
 export const TOOL_LABELS: Record<string, string> = Object.fromEntries(
   TOOL_OPTIONS.map((tool) => [tool.value, tool.label])
 );
+
+const BINDING_TOOL_SUPPORT: Record<string, string[]> = {
+  instructions: ["claude-code", "codex"],
+  skill: ["claude-code", "codex", "cursor", "windsurf", "opencode"],
+  agent: ["claude-code"],
+  rule: ["claude-code", "cursor"],
+  mcp: ["claude-desktop", "claude-code", "cursor", "windsurf", "codex"],
+  plugin: [],
+};
+
+export function compatibleToolsForBindingType(bindingType: string) {
+  const supported = BINDING_TOOL_SUPPORT[bindingType] || [];
+  return TOOL_OPTIONS.filter((tool) => supported.includes(tool.value));
+}
+
+export function resolveBindingScope(
+  tool: string,
+  bindingType: string,
+  explicitScope?: string | null
+): BindingScope {
+  if (explicitScope === "project" || explicitScope === "user") {
+    return explicitScope;
+  }
+
+  if (tool === "codex" && bindingType === "instructions") {
+    return "project";
+  }
+
+  return "user";
+}
+
+export function bindingScopeLabel(scope: BindingScope): string {
+  return scope === "project" ? "Project" : "Global";
+}
+
+export function bindingScopeDescription(tool: string, bindingType: string, explicitScope?: string | null): string {
+  const scope = resolveBindingScope(tool, bindingType, explicitScope);
+  if (scope === "project") {
+    return "Writes once into a project-level file such as AGENTS.md.";
+  }
+
+  if (bindingType === "skill") {
+    return "Installs once into the shared global skills registry and links into this tool for the current user.";
+  }
+
+  if (bindingType === "instructions") {
+    return "Writes once into the tool's shared user-level instruction file.";
+  }
+
+  return "Writes once into the tool's shared user-level config for the current user.";
+}
+
+export function bindingBadgeLabel(binding: {
+  tool: string;
+  bindingType: string;
+  scope?: string | null;
+}): string {
+  return `${TOOL_LABELS[binding.tool] || binding.tool} · ${bindingScopeLabel(
+    resolveBindingScope(binding.tool, binding.bindingType, binding.scope)
+  )}`;
+}
+
+export function manifestBindingBadges(manifest?: ArtifactManifest | null): string[] {
+  if (!manifest) return [];
+
+  if (manifest.bindings.length > 0) {
+    return [...new Set(manifest.bindings.map((binding) => bindingBadgeLabel(binding)))];
+  }
+
+  return (manifest.compatibility.tools || []).map((tool) => TOOL_LABELS[tool] || tool);
+}
 
 export function timeAgo(dateStr?: string | null): string {
   if (!dateStr) return "Never";

@@ -14,7 +14,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import * as api from "@/lib/api";
-import { reliabilityTone, submissionStatusTone, timeAgo } from "@/lib/dashboard";
+import { manifestBindingBadges, reliabilityTone, submissionStatusTone, timeAgo } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
 
 import { useAuth } from "../lib/auth";
@@ -200,6 +200,15 @@ export default function Suggestions() {
                           " · " +
                           timeAgo(submission.createdAt)}
                       </div>
+                      {submission.normalizedPreview?.manifest ? (
+                        <div className="flex flex-wrap gap-2">
+                          {manifestBindingBadges(submission.normalizedPreview.manifest).map((badge) => (
+                            <StatusBadge key={badge} tone="neutral">
+                              {badge}
+                            </StatusBadge>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {expanded ? "Hide" : "Review"}

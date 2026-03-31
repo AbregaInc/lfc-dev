@@ -2,6 +2,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8787";
 
 export type ArtifactKind = "instructions" | "rule" | "agent" | "skill" | "mcp" | "plugin";
 export type ReliabilityTier = "managed" | "best_effort" | "unreliable";
+export type BindingScope = "user" | "project";
 
 export interface Profile {
   id: string;
@@ -61,6 +62,7 @@ export interface ArtifactManifest {
   bindings: Array<{
     tool: string;
     bindingType: string;
+    scope?: BindingScope;
     targetPath?: string;
     configTemplate?: string;
     configJson?: Record<string, unknown>;

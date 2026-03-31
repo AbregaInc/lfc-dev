@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
 import StatusBadge from "@/components/StatusBadge";
+import ToolToggleButton from "@/components/ToolToggleButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +24,14 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import * as api from "@/lib/api";
-import { reliabilityTone, TOOL_LABELS, TOOL_OPTIONS } from "@/lib/dashboard";
+import {
+  bindingScopeDescription,
+  bindingScopeLabel,
+  compatibleToolsForBindingType,
+  manifestBindingBadges,
+  reliabilityTone,
+  resolveBindingScope,
+} from "@/lib/dashboard";
 
 import { useAuth } from "../lib/auth";
 
@@ -35,6 +43,14 @@ function slugify(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function bindingTypeForKind(kind: api.ArtifactKind) {
+  return kind === "instructions" ? "instructions" : kind;
+}
+
+function defaultToolsForKind(kind: api.ArtifactKind) {
+  return compatibleToolsForBindingType(bindingTypeForKind(kind)).map((tool) => tool.value);
 }
 
 export default function Artifacts() {
@@ -49,7 +65,7 @@ export default function Artifacts() {
     name: "",
     description: "",
     kind: "instructions" as api.ArtifactKind,
-    tool: "claude-code",
+    tools: defaultToolsForKind("instructions"),
     content: "",
     profileId: "",
   });
@@ -87,7 +103,12 @@ export default function Artifacts() {
     setError("");
     setMessage("");
 
-    const bindingType = form.kind === "instructions" ? "instructions" : form.kind;
+    const bindingType = bindingTypeForKind(form.kind);
+    if (form.tools.length === 0) {
+      setError("Select at least one compatible tool.");
+      return;
+    }
+
     const manifest: api.ArtifactManifest = {
       kind: form.kind,
       reliabilityTier: "managed",
@@ -117,14 +138,13 @@ export default function Artifacts() {
       compatibility: {
         os: ["darwin", "linux", "windows"],
         arch: ["x64", "arm64"],
-        tools: [form.tool],
+        tools: form.tools,
       },
-      bindings: [
-        {
-          tool: form.tool,
-          bindingType,
-        },
-      ],
+      bindings: form.tools.map((tool) => ({
+        tool,
+        bindingType,
+        scope: resolveBindingScope(tool, bindingType),
+      })),
     };
 
     try {
@@ -150,7 +170,7 @@ export default function Artifacts() {
         name: "",
         description: "",
         kind: "instructions",
-        tool: "claude-code",
+        tools: defaultToolsForKind("instructions"),
         content: "",
         profileId: profiles[0]?.id || "",
       });
@@ -160,6 +180,10 @@ export default function Artifacts() {
       setError(err.message || "Failed to create artifact");
     }
   };
+
+  const bindingType = bindingTypeForKind(form.kind);
+  const compatibleToolOptions = compatibleToolsForBindingType(bindingType);
+  const selectedTools = compatibleToolOptions.filter((tool) => form.tools.includes(tool.value));
 
   return (
     <div className="space-y-6">
@@ -195,6 +219,34 @@ export default function Artifacts() {
             </CardDescription>
           </CardHeader>
           <CardContent className="py-5">
+            <div className="mb-4 rounded-xl border border-dashed bg-muted/15 px-4 py-3">
+              <div className="flex flex-col gap-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-foreground">
+                    This artifact will be published to {selectedTools.length} binding
+                    {selectedTools.length === 1 ? "" : "s"}.
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    One release can target multiple compatible tools. Each binding keeps its own
+                    user-global or project-wide scope.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTools.map((tool) => {
+                    const bindingScope = resolveBindingScope(tool.value, bindingType);
+                    return (
+                      <StatusBadge key={tool.value} tone={bindingScope === "project" ? "info" : "warning"}>
+                        {tool.label} · {bindingScopeLabel(bindingScope)}
+                      </StatusBadge>
+                    );
+                  })}
+                  {selectedTools.length === 0 ? (
+                    <StatusBadge tone="danger">No bindings selected</StatusBadge>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <Label htmlFor="artifact-name">Name</Label>
@@ -228,12 +280,17 @@ export default function Artifacts() {
                   <Label>Kind</Label>
                   <Select
                     value={form.kind}
-                    onValueChange={(value) =>
+                    onValueChange={(value) => {
+                      const nextKind = value as api.ArtifactKind;
+                      const nextCompatibleTools = defaultToolsForKind(nextKind);
                       setForm((current) => ({
                         ...current,
-                        kind: value as api.ArtifactKind,
+                        kind: nextKind,
+                        tools: current.tools.filter((tool) => nextCompatibleTools.includes(tool)).length
+                          ? current.tools.filter((tool) => nextCompatibleTools.includes(tool))
+                          : nextCompatibleTools,
                       }))
-                    }
+                    }}
                   >
                     <SelectTrigger className="mt-2 w-full">
                       <SelectValue placeholder="Choose a kind" />
@@ -247,32 +304,73 @@ export default function Artifacts() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
 
-                <div>
-                  <Label>Tool</Label>
-                  <Select
-                    value={form.tool}
-                    onValueChange={(value) =>
-                      setForm((current) => ({
-                        ...current,
-                        tool: value || current.tool,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Choose a tool" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TOOL_OPTIONS.filter((tool) => tool.value !== "claude-desktop").map(
-                        (tool) => (
-                          <SelectItem key={tool.value} value={tool.value}>
-                            {tool.label}
-                          </SelectItem>
-                        )
-                      )}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label>Target tools</Label>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Select every compatible tool that should receive this artifact when assigned.
+                    </p>
+                  </div>
+                  {compatibleToolOptions.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          tools:
+                            current.tools.length === compatibleToolOptions.length
+                              ? [compatibleToolOptions[0].value]
+                              : compatibleToolOptions.map((tool) => tool.value),
+                        }))
+                      }
+                    >
+                      {form.tools.length === compatibleToolOptions.length ? "Keep one" : "Select all"}
+                    </Button>
+                  ) : null}
                 </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {compatibleToolOptions.map((tool) => {
+                    const selected = form.tools.includes(tool.value);
+                    const scope = resolveBindingScope(tool.value, bindingType);
+                    return (
+                      <ToolToggleButton
+                        key={tool.value}
+                        label={`${tool.label} · ${bindingScopeLabel(scope)}`}
+                        selected={selected}
+                        onClick={() =>
+                          setForm((current) => {
+                            const alreadySelected = current.tools.includes(tool.value);
+                            const nextTools = alreadySelected
+                              ? current.tools.filter((value) => value !== tool.value)
+                              : [...current.tools, tool.value];
+                            return { ...current, tools: nextTools };
+                          })
+                        }
+                      />
+                    );
+                  })}
+                </div>
+
+                {selectedTools.length > 0 ? (
+                  <div className="rounded-xl border bg-muted/15 px-4 py-3 text-sm text-muted-foreground">
+                    {selectedTools.map((tool) => (
+                      <div key={tool.value}>
+                        <span className="font-medium text-foreground">{tool.label}</span>:{" "}
+                        {bindingScopeDescription(
+                          tool.value,
+                          bindingType,
+                          resolveBindingScope(tool.value, bindingType)
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div>
@@ -371,9 +469,9 @@ export default function Artifacts() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {(release?.manifest.compatibility.tools || []).map((tool) => (
-                        <StatusBadge key={tool} tone="neutral">
-                          {TOOL_LABELS[tool] || tool}
+                      {manifestBindingBadges(release?.manifest).map((badge) => (
+                        <StatusBadge key={badge} tone="neutral">
+                          {badge}
                         </StatusBadge>
                       ))}
                     </div>
