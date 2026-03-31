@@ -1,4 +1,10 @@
 import { useState } from "react";
+
+import BrandMark from "../components/BrandMark";
+import StatusBadge from "../components/StatusBadge";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import { Input } from "../components/ui/input";
 import { API_URL } from "../config";
 
 export default function Login({
@@ -12,8 +18,8 @@ export default function Login({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
     setLoading(true);
     try {
@@ -26,60 +32,66 @@ export default function Login({
   };
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: "var(--color-surface)" }}>
-      {/* Header */}
-      <div className="px-5 pt-6 pb-4 text-center" style={{ borderBottom: "1px solid var(--color-border)" }}>
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold mx-auto mb-3"
-          style={{ background: "var(--color-accent)", color: "var(--color-text-inverse)" }}
-        >
-          LFC
-        </div>
-        <div className="text-[15px] font-semibold" style={{ letterSpacing: "-0.01em" }}>
-          Connect to LFC
-        </div>
-        <div className="text-[12px] mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
-          Sign in to sync your team's configs
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <div className="flex flex-1 items-center justify-center px-4 py-6">
+        <div className="w-full max-w-md space-y-4">
+          <div className="space-y-3 text-center">
+            <div className="flex justify-center">
+              <BrandMark />
+            </div>
+            <StatusBadge tone="neutral">Desktop client</StatusBadge>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                Connect this machine
+              </h1>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Sign in once. LFC will detect compatible tools, sync approved artifacts, and keep
+                your local personal config intact.
+              </p>
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="space-y-4 py-5">
+              {error ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {error}
+                </div>
+              ) : null}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                    Email
+                  </label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                    Password
+                  </label>
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                  />
+                </div>
+
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? "Connecting..." : "Connect"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
-
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="flex-1 px-5 py-4 space-y-3.5">
-        {error && (
-          <div
-            className="p-2.5 rounded-lg text-[12px]"
-            style={{ background: "var(--color-danger-subtle)", color: "var(--color-danger)" }}
-          >
-            {error}
-          </div>
-        )}
-
-        <div>
-          <label className="label">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input-base"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="label">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input-base"
-            required
-          />
-        </div>
-
-        <button type="submit" disabled={loading} className="btn-primary w-full" style={{ marginTop: "8px" }}>
-          {loading ? "Connecting..." : "Connect"}
-        </button>
-      </form>
     </div>
   );
 }

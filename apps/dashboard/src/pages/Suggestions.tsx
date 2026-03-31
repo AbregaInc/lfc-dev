@@ -1,308 +1,342 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
+import StatusBadge from "@/components/StatusBadge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import * as api from "@/lib/api";
+import { manifestBindingBadges, reliabilityTone, submissionStatusTone, timeAgo } from "@/lib/dashboard";
+import { cn } from "@/lib/utils";
+
 import { useAuth } from "../lib/auth";
-import * as api from "../lib/api";
 
-function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
-}
-
-const CONFIG_TYPE_COLORS: Record<string, { bg: string; color: string }> = {
-  mcp: { bg: "#eff6ff", color: "#2563eb" },
-  instructions: { bg: "#f0fdf4", color: "#16a34a" },
-  skills: { bg: "#faf5ff", color: "#7c3aed" },
-};
-
-const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  pending: { bg: "#fffbeb", color: "#d97706" },
-  approved: { bg: "#f0fdf4", color: "#16a34a" },
-  denied: { bg: "#fef2f2", color: "#dc2626" },
-};
+type Tab = "open" | "approved" | "denied" | "all";
 
 export default function Suggestions() {
   const { user } = useAuth();
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState("all");
+  const [submissions, setSubmissions] = useState<api.Submission[]>([]);
+  const [profiles, setProfiles] = useState<api.Profile[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>("open");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [denyingId, setDenyingId] = useState<string | null>(null);
-  const [denyNote, setDenyNote] = useState("");
-  const [editedContent, setEditedContent] = useState<Record<string, string>>({});
+  const [selectedProfiles, setSelectedProfiles] = useState<Record<string, string[]>>({});
+  const [denyNotes, setDenyNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSuggestions();
-  }, [activeTab]);
+    if (!user?.orgId) return;
+    void loadData();
+  }, [user?.orgId]);
 
-  const loadSuggestions = async () => {
+  const loadData = async () => {
     if (!user?.orgId) return;
     setLoading(true);
+
     try {
-      const status = activeTab === "all" ? undefined : activeTab;
-      const data = await api.getSuggestions(user.orgId, status);
-      setSuggestions(data.suggestions);
-      const countData = await api.getSuggestionCount(user.orgId);
-      setPendingCount(countData.count);
-    } catch {
-      setSuggestions([]);
+      const [submissionsData, profilesData] = await Promise.all([
+        api.listSubmissions(user.orgId),
+        api.listProfiles(user.orgId),
+      ]);
+      setSubmissions(submissionsData.submissions);
+      setProfiles(profilesData.profiles);
+
+      const firstProfileId = profilesData.profiles[0]?.id;
+      if (firstProfileId) {
+        setSelectedProfiles((current) => {
+          const next = { ...current };
+          for (const submission of submissionsData.submissions) {
+            if (!next[submission.id]) next[submission.id] = [firstProfileId];
+          }
+          return next;
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const getContent = (s: any): string => editedContent[s.id] ?? s.content ?? "";
+  const openCount = useMemo(
+    () =>
+      submissions.filter(
+        (submission) => submission.status !== "approved" && submission.status !== "denied"
+      ).length,
+    [submissions]
+  );
 
-  const handleApprove = async (suggestion: any) => {
-    if (!user?.orgId) return;
-    try {
-      await api.approveSuggestion(user.orgId, suggestion.id, { content: getContent(suggestion) });
-      loadSuggestions();
-    } catch {}
+  const filtered = useMemo(() => {
+    if (activeTab === "all") return submissions;
+    if (activeTab === "open") {
+      return submissions.filter(
+        (submission) => submission.status !== "approved" && submission.status !== "denied"
+      );
+    }
+    return submissions.filter((submission) => submission.status === activeTab);
+  }, [activeTab, submissions]);
+
+  const toggleProfile = (submissionId: string, profileId: string) => {
+    setSelectedProfiles((current) => {
+      const values = current[submissionId] || [];
+      const next = values.includes(profileId)
+        ? values.filter((value) => value !== profileId)
+        : [...values, profileId];
+      return { ...current, [submissionId]: next };
+    });
   };
 
-  const handleDeny = async (suggestionId: string) => {
+  const handleApprove = async (submission: api.Submission) => {
     if (!user?.orgId) return;
+    setBusyId(submission.id);
+
     try {
-      await api.denySuggestion(user.orgId, suggestionId, denyNote);
-      setDenyingId(null);
-      setDenyNote("");
-      loadSuggestions();
-    } catch {}
+      await api.approveSubmission(user.orgId, submission.id, {
+        profileIds: selectedProfiles[submission.id] || [],
+        artifactName: submission.normalizedPreview?.name || submission.title,
+        description: submission.description || undefined,
+        version: "1.0.0",
+      });
+      await loadData();
+      window.dispatchEvent(new Event("lfc:submissions-changed"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDeny = async (submissionId: string) => {
+    if (!user?.orgId) return;
+    setBusyId(submissionId);
+
+    try {
+      await api.denySubmission(user.orgId, submissionId, denyNotes[submissionId]);
+      await loadData();
+      window.dispatchEvent(new Event("lfc:submissions-changed"));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const tabs = [
-    { id: "all", label: "All" },
-    { id: "pending", label: "Pending", count: pendingCount },
-    { id: "approved", label: "Approved" },
-    { id: "denied", label: "Denied" },
+    { id: "open" as const, label: "Open", count: openCount },
+    { id: "approved" as const, label: "Approved" },
+    { id: "denied" as const, label: "Denied" },
+    { id: "all" as const, label: "All" },
   ];
 
   return (
-    <div>
-      <div className="mb-6">
-        <div className="flex items-center gap-3">
-          <h1 className="page-title">Suggestions</h1>
-          {pendingCount > 0 && (
-            <span
-              className="badge"
-              style={{ background: "#fffbeb", color: "#d97706" }}
-            >
-              {pendingCount} pending
-            </span>
-          )}
-        </div>
-        <p className="page-subtitle">Review config suggestions from your team</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Submissions"
+        subtitle="Review artifacts discovered by teammates, normalize them, and promote the ones that should become releases."
+        action={openCount > 0 ? <StatusBadge tone="info">{openCount} open</StatusBadge> : null}
+      />
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 p-1 rounded-lg" style={{ background: "var(--color-surface-sunken)" }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className="flex-1 px-4 py-2 rounded-md text-[13px] font-medium transition-all cursor-pointer border-none flex items-center justify-center gap-2"
-            style={{
-              background: activeTab === tab.id ? "var(--color-surface)" : "transparent",
-              color: activeTab === tab.id ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
-              boxShadow: activeTab === tab.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-            }}
-          >
-            {tab.label}
-            {tab.count !== undefined && tab.count > 0 && (
-              <span
-                className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full"
-                style={{ background: "#fffbeb", color: "#d97706", minWidth: "18px", textAlign: "center" }}
-              >
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab((value as Tab) || "open")}
+      >
+        <TabsList className="w-full justify-start">
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id} className="px-3">
+              {tab.label}
+              {tab.count ? (
+                <StatusBadge tone="info" className="ml-1">
+                  {tab.count}
+                </StatusBadge>
+              ) : null}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      {/* List */}
       {loading ? (
-        <div className="text-[14px]" style={{ color: "var(--color-text-tertiary)" }}>Loading...</div>
-      ) : suggestions.length === 0 ? (
-        <div className="card p-12 text-center">
-          <div className="text-[14px]" style={{ color: "var(--color-text-tertiary)" }}>
-            No suggestions yet. Team members can suggest configs from the tray app.
-          </div>
-        </div>
+        <EmptyState title="Loading submissions..." />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          title="No submissions in this view"
+          description="When teammates share new artifacts, they will appear here for review."
+        />
       ) : (
-        <div className="space-y-3">
-          {suggestions.map((s) => {
-            const isExpanded = expandedId === s.id;
-            const typeStyle = CONFIG_TYPE_COLORS[s.configType] || { bg: "var(--color-surface-sunken)", color: "var(--color-text-secondary)" };
-            const statusStyle = STATUS_COLORS[s.status] || { bg: "var(--color-surface-sunken)", color: "var(--color-text-secondary)" };
+        <div className="space-y-4">
+          {filtered.map((submission) => {
+            const expanded = expandedId === submission.id;
+            const isOpen =
+              submission.status !== "approved" && submission.status !== "denied";
 
             return (
-              <div key={s.id} className="card">
-                {/* Header row */}
-                <div
-                  className="p-4 cursor-pointer flex items-center justify-between gap-4"
-                  onClick={() => setExpandedId(isExpanded ? null : s.id)}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2.5 mb-1">
-                      <span className="text-[14px] font-medium" style={{ color: "var(--color-text-primary)" }}>
-                        {s.title}
-                      </span>
-                      <span
-                        className="badge"
-                        style={{ background: typeStyle.bg, color: typeStyle.color }}
-                      >
-                        {(s.configType || "").toUpperCase()}
-                      </span>
-                      <span
-                        className="badge"
-                        style={{ background: statusStyle.bg, color: statusStyle.color }}
-                      >
-                        {s.status}
-                      </span>
-                    </div>
-                    <div className="text-[12px] flex items-center gap-2" style={{ color: "var(--color-text-tertiary)" }}>
-                      <span>{s.submitterName || "Unknown"}</span>
-                      <span style={{ opacity: 0.4 }}>-</span>
-                      <span>{s.profileName || "Global"}</span>
-                      <span style={{ opacity: 0.4 }}>-</span>
-                      <span>{timeAgo(s.createdAt)}</span>
-                    </div>
-                  </div>
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      color: "var(--color-text-tertiary)",
-                      transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                      transition: "transform 150ms",
-                    }}
+              <Card key={submission.id} className="py-0">
+                <CardContent className="space-y-4 py-5">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : submission.id)}
+                    className="flex w-full cursor-pointer items-start justify-between gap-4 text-left"
                   >
-                    <path d="M4 6l4 4 4-4" />
-                  </svg>
-                </div>
-
-                {/* Expanded content */}
-                {isExpanded && (
-                  <div className="px-4 pb-4" style={{ borderTop: "1px solid var(--color-border-subtle)" }}>
-                    <div className="pt-4">
-                      {s.description && (
-                        <p className="text-[13px] mb-4" style={{ color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
-                          {s.description}
-                        </p>
-                      )}
-
-                      {/* Proposed content: editable for pending, read-only otherwise */}
-                      <div className="mb-4">
-                        <div className="section-title mb-2">Proposed content</div>
-                        {s.status === "pending" ? (
-                          <textarea
-                            value={getContent(s)}
-                            onChange={(e) => setEditedContent((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                            className="input-base font-mono resize-y"
-                            style={{ minHeight: "160px", fontSize: "12px", lineHeight: "1.6" }}
-                          />
-                        ) : (
-                          <pre
-                            className="p-3 rounded-lg text-[12px] font-mono overflow-auto"
-                            style={{
-                              background: "var(--color-surface-sunken)",
-                              color: "var(--color-text-secondary)",
-                              lineHeight: "1.6",
-                              maxHeight: "300px",
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {s.content}
-                          </pre>
-                        )}
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-medium text-foreground">
+                          {submission.title}
+                        </div>
+                        <StatusBadge tone="neutral">{submission.artifactKind}</StatusBadge>
+                        <StatusBadge tone={reliabilityTone(submission.reliabilityTier)}>
+                          {submission.reliabilityTier}
+                        </StatusBadge>
+                        <StatusBadge tone={submissionStatusTone(submission.status)}>
+                          {submission.status}
+                        </StatusBadge>
                       </div>
-
-                      {/* Diff view if available */}
-                      {s.diff && (
-                        <div className="mb-4">
-                          <div className="section-title mb-2">Diff</div>
-                          <pre
-                            className="p-3 rounded-lg text-[12px] font-mono overflow-auto"
-                            style={{
-                              background: "var(--color-surface-sunken)",
-                              color: "var(--color-text-secondary)",
-                              lineHeight: "1.6",
-                              maxHeight: "300px",
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {s.diff}
-                          </pre>
+                      <div className="text-sm text-muted-foreground">
+                        {(submission.userName || submission.userEmail || "Unknown user") +
+                          " · " +
+                          (submission.sourceTool ||
+                            submission.rawCapture.tool?.toString() ||
+                            "unknown tool") +
+                          " · " +
+                          timeAgo(submission.createdAt)}
+                      </div>
+                      {submission.normalizedPreview?.manifest ? (
+                        <div className="flex flex-wrap gap-2">
+                          {manifestBindingBadges(submission.normalizedPreview.manifest).map((badge) => (
+                            <StatusBadge key={badge} tone="neutral">
+                              {badge}
+                            </StatusBadge>
+                          ))}
                         </div>
-                      )}
-
-                      {/* Actions for pending */}
-                      {s.status === "pending" && (
-                        <div>
-                          <div className="flex gap-2 pt-1">
-                            <button onClick={() => handleApprove(s)} className="btn-primary">
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (denyingId === s.id) { setDenyingId(null); setDenyNote(""); }
-                                else { setDenyingId(s.id); setDenyNote(""); }
-                              }}
-                              className="btn-secondary"
-                              style={{ color: "var(--color-danger)" }}
-                            >
-                              Deny
-                            </button>
-                          </div>
-                          {denyingId === s.id && (
-                            <div className="flex gap-2 mt-3">
-                              <input
-                                type="text"
-                                value={denyNote}
-                                onChange={(e) => setDenyNote(e.target.value)}
-                                placeholder="Optional reason..."
-                                className="input-base flex-1"
-                                autoFocus
-                                onKeyDown={(e) => { if (e.key === "Enter") handleDeny(s.id); }}
-                              />
-                              <button onClick={() => handleDeny(s.id)} className="btn-primary">
-                                Confirm deny
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Show denial note if denied */}
-                      {s.status === "denied" && s.denyNote && (
-                        <div
-                          className="p-3 rounded-lg text-[13px]"
-                          style={{ background: "var(--color-danger-subtle)", color: "var(--color-danger)" }}
-                        >
-                          <span className="font-medium">Denial reason:</span> {s.denyNote}
-                        </div>
-                      )}
+                      ) : null}
                     </div>
-                  </div>
-                )}
-              </div>
+                    <div className="text-sm text-muted-foreground">
+                      {expanded ? "Hide" : "Review"}
+                    </div>
+                  </button>
+
+                  {expanded ? (
+                    <div className="space-y-4 border-t pt-4">
+                      {submission.description ? (
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          {submission.description}
+                        </p>
+                      ) : null}
+
+                      {submission.normalizedPreview?.notes?.length ? (
+                        <Card className="bg-muted/30 py-0">
+                          <CardHeader className="border-b py-4">
+                            <CardTitle>Normalization notes</CardTitle>
+                            <CardDescription>
+                              Why this artifact was marked managed, best-effort, or unreliable.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-2 py-4">
+                            {submission.normalizedPreview.notes.map((note, index) => (
+                              <div key={index} className="text-sm text-muted-foreground">
+                                {note}
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      ) : null}
+
+                      <Card className="bg-muted/30 py-0">
+                        <CardHeader className="border-b py-4">
+                          <CardTitle>Resolved manifest</CardTitle>
+                          <CardDescription>
+                            This is the exact payload that would be published if approved.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="py-4">
+                          <pre className="max-h-80 overflow-auto rounded-lg border bg-background p-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap break-words">
+                            {JSON.stringify(
+                              submission.normalizedPreview?.manifest || submission.rawCapture,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </CardContent>
+                      </Card>
+
+                      {user?.role === "admin" && isOpen ? (
+                        <Card className="bg-muted/30 py-0">
+                          <CardHeader className="border-b py-4">
+                            <CardTitle>Approval targets</CardTitle>
+                            <CardDescription>
+                              Pick the profiles that should receive this artifact on approval.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4 py-4">
+                            {profiles.length === 0 ? (
+                              <div className="text-sm text-muted-foreground">
+                                Create a profile before approving this artifact.
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {profiles.map((profile) => {
+                                  const selected = (
+                                    selectedProfiles[submission.id] || []
+                                  ).includes(profile.id);
+
+                                  return (
+                                    <button
+                                      key={profile.id}
+                                      type="button"
+                                      onClick={() => toggleProfile(submission.id, profile.id)}
+                                      className={cn(
+                                        buttonVariants({
+                                          variant: selected ? "secondary" : "outline",
+                                          size: "sm",
+                                        }),
+                                        "cursor-pointer"
+                                      )}
+                                    >
+                                      {profile.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            <div className="space-y-3">
+                              <Textarea
+                                value={denyNotes[submission.id] || ""}
+                                onChange={(event) =>
+                                  setDenyNotes((current) => ({
+                                    ...current,
+                                    [submission.id]: event.target.value,
+                                  }))
+                                }
+                                className="min-h-24"
+                                placeholder="Optional denial note or review comment"
+                              />
+
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  disabled={busyId === submission.id || profiles.length === 0}
+                                  onClick={() => void handleApprove(submission)}
+                                >
+                                  {busyId === submission.id
+                                    ? "Applying..."
+                                    : "Approve and publish"}
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  disabled={busyId === submission.id}
+                                  onClick={() => void handleDeny(submission.id)}
+                                >
+                                  Deny
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
             );
           })}
         </div>

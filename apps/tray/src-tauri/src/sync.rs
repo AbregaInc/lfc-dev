@@ -1,40 +1,12 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SyncRequest {
-    #[serde(rename = "installedTools")]
-    pub installed_tools: Vec<String>,
-    #[serde(rename = "currentVersions")]
-    pub current_versions: HashMap<String, u32>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SyncResponse {
-    pub configs: Vec<SyncConfigItem>,
-    pub secrets: HashMap<String, String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SyncConfigItem {
-    #[serde(rename = "profileId")]
-    pub profile_id: String,
-    #[serde(rename = "profileName")]
-    pub profile_name: String,
-    #[serde(rename = "configType")]
-    pub config_type: String,
-    pub content: String,
-    pub version: u32,
-    #[serde(rename = "targetTools")]
-    pub target_tools: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct McpServersPayload {
-    pub servers: Vec<McpServer>,
-}
+use std::path::{Path, PathBuf};
+use std::process::Command;
+#[cfg(unix)]
+use std::os::unix::fs as unix_fs;
+#[cfg(windows)]
+use std::os::windows::fs as windows_fs;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct McpServer {
@@ -98,6 +70,7 @@ pub fn detect_installed_tools() -> Vec<String> {
         ("cursor", home.join(".cursor")),
         ("codex", home.join(".codex")),
         ("windsurf", home.join(".codeium/windsurf")),
+        ("opencode", home.join(".opencode")),
     ];
 
     for (name, dir) in checks {
@@ -107,37 +80,6 @@ pub fn detect_installed_tools() -> Vec<String> {
     }
 
     tools
-}
-
-// ─── API fetch ──────────────────────────────────────────────────────
-
-/// Fetch configs from the API
-pub async fn fetch_configs(
-    api_url: &str,
-    token: &str,
-    installed_tools: &[String],
-) -> Result<SyncResponse, String> {
-    let client = reqwest::Client::new();
-    let req = SyncRequest {
-        installed_tools: installed_tools.to_vec(),
-        current_versions: HashMap::new(),
-    };
-
-    let resp = client
-        .post(format!("{}/api/sync", api_url))
-        .header("Authorization", format!("Bearer {}", token))
-        .json(&req)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if !resp.status().is_success() {
-        return Err(format!("API error: {}", resp.status()));
-    }
-
-    resp.json::<SyncResponse>()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))
 }
 
 // ─── Config writers (safe — never lose user data) ───────────────────
@@ -152,6 +94,91 @@ fn mcp_config_path(tool: &str) -> Option<PathBuf> {
         "codex" => Some(home.join(".codex/mcp.json")),
         _ => None,
     }
+}
+
+fn shared_skills_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".agents/skills")
+}
+
+fn tool_skills_dir(tool: &str) -> Option<PathBuf> {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    match tool {
+        "claude-code" => Some(home.join(".claude/skills")),
+        "codex" => Some(home.join(".codex/skills")),
+        "cursor" => Some(home.join(".cursor/skills")),
+        "windsurf" => Some(home.join(".codeium/windsurf/skills")),
+        "opencode" => Some(home.join(".opencode/skills")),
+        _ => None,
+    }
+}
+
+fn managed_skill_name(name: &str) -> String {
+    format!("lfc-{}", name)
+}
+
+fn managed_skill_root(name: &str) -> PathBuf {
+    shared_skills_dir().join(managed_skill_name(name))
+}
+
+fn managed_skill_file(name: &str) -> PathBuf {
+    managed_skill_root(name).join("SKILL.md")
+}
+
+fn skill_entry_is_managed(path: &Path) -> bool {
+    if path.is_symlink() {
+        if let Ok(resolved) = fs::canonicalize(path) {
+            if resolved.starts_with(shared_skills_dir()) {
+                return true;
+            }
+        }
+    }
+
+    if path.is_dir() {
+        let skill_md = path.join("SKILL.md");
+        return fs::read_to_string(&skill_md)
+            .map(|content| content.contains("<!-- managed_by: lfc -->"))
+            .unwrap_or(false);
+    }
+
+    fs::read_to_string(path)
+        .map(|content| content.contains("<!-- managed_by: lfc -->"))
+        .unwrap_or(false)
+}
+
+fn ensure_skill_symlink(target: &Path, link_path: &Path) -> Result<(), String> {
+    if link_path.exists() || link_path.is_symlink() {
+        if !skill_entry_is_managed(link_path) {
+            return Err(format!(
+                "Managed skill link {} already exists but is not owned by LFC",
+                link_path.display()
+            ));
+        }
+
+        let already_points_to_target = fs::canonicalize(link_path)
+            .map(|resolved| resolved == target)
+            .unwrap_or(false);
+        if already_points_to_target {
+            return Ok(());
+        }
+
+        fs::remove_dir_all(link_path)
+            .or_else(|_| fs::remove_file(link_path))
+            .map_err(|e| format!("Remove stale skill link error: {}", e))?;
+    }
+
+    if let Some(parent) = link_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Mkdir error: {}", e))?;
+    }
+
+    #[cfg(unix)]
+    unix_fs::symlink(target, link_path).map_err(|e| format!("Create skill symlink error: {}", e))?;
+    #[cfg(windows)]
+    windows_fs::symlink_dir(target, link_path)
+        .map_err(|e| format!("Create skill symlink error: {}", e))?;
+
+    Ok(())
 }
 
 /// Write MCP config for a specific tool.
@@ -499,63 +526,49 @@ fn extract_user_markdown(content: &str, start_marker: &str, end_marker: &str) ->
     }
 }
 
-/// Write skill files to the tool's skills directory.
+/// Write skills into the shared global registry and fan them out into tool skill dirs.
 ///
 /// SAFETY GUARANTEES:
-/// 1. Only writes to files/dirs that are tagged as lfc-managed
-/// 2. Never overwrites or deletes user-installed skills
-/// 3. Uses a `<!-- managed_by: lfc -->` marker in skill content
-/// 4. If a skill dir/file exists and is NOT managed by lfc, it is never touched
+/// 1. Canonical content lives under ~/.agents/skills/lfc-<name>/SKILL.md
+/// 2. Tool-specific entries are symlinks pointing at that shared root
+/// 3. Only lfc-managed roots and links are modified
+/// 4. User-owned skills are never overwritten or deleted
 pub fn write_skills(tool: &str, name: &str, content: &str) -> Result<(), String> {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-
-    let skills_dir = match tool {
-        "claude-code" => home.join(".claude/skills"),
+    let skills_dir = match tool_skills_dir(tool) {
+        Some(dir) => dir,
         _ => {
             println!("[LFC] Skipping skills for unsupported tool: {}", tool);
             return Ok(());
         }
     };
 
-    fs::create_dir_all(&skills_dir).map_err(|e| format!("Mkdir error: {}", e))?;
-
-    // Use a subdirectory for lfc-managed skills to avoid any collision with user skills
-    let skill_dir = skills_dir.join(format!("lfc-{}", name));
-    let file_path = skill_dir.join("SKILL.md");
-
-    // If a non-lfc skill with this name exists, never touch it
-    let plain_skill_dir = skills_dir.join(name);
-    let plain_skill_file = skills_dir.join(format!("{}.md", name));
-    if plain_skill_dir.exists() || plain_skill_file.exists() {
-        // Check if it's ours
-        let is_ours = if plain_skill_dir.exists() {
-            let marker_path = plain_skill_dir.join("SKILL.md");
-            fs::read_to_string(&marker_path)
-                .map(|c| c.contains("<!-- managed_by: lfc -->"))
-                .unwrap_or(false)
-        } else {
-            fs::read_to_string(&plain_skill_file)
-                .map(|c| c.contains("<!-- managed_by: lfc -->"))
-                .unwrap_or(false)
-        };
-
-        if !is_ours {
-            println!("[LFC] Skill '{}' exists and is user-owned — skipping (will use lfc-{} prefix)", name, name);
-        }
-    }
-
-    // Write our managed skill with clear marker
+    let shared_dir = managed_skill_root(name);
+    let file_path = managed_skill_file(name);
+    let link_path = skills_dir.join(managed_skill_name(name));
     let managed_content = format!("<!-- managed_by: lfc -->\n{}", content);
 
-    fs::create_dir_all(&skill_dir).map_err(|e| format!("Mkdir error: {}", e))?;
-    let existing = fs::read_to_string(&file_path).unwrap_or_default();
-    if existing == managed_content {
-        return Ok(());
+    if shared_dir.exists() && !skill_entry_is_managed(&shared_dir) {
+        return Err(format!(
+            "Managed skill root {} already exists but is not owned by LFC",
+            shared_dir.display()
+        ));
     }
 
-    backup_file(&file_path);
-    fs::write(&file_path, managed_content).map_err(|e| format!("Write error: {}", e))?;
-    println!("[LFC] Wrote skill '{}' for {}: {}", name, tool, file_path.display());
+    fs::create_dir_all(&shared_dir).map_err(|e| format!("Mkdir error: {}", e))?;
+    let existing = fs::read_to_string(&file_path).unwrap_or_default();
+    if existing != managed_content {
+        backup_file(&file_path);
+        fs::write(&file_path, managed_content).map_err(|e| format!("Write error: {}", e))?;
+    }
+
+    ensure_skill_symlink(&shared_dir, &link_path)?;
+    println!(
+        "[LFC] Wrote skill '{}' for {}: {} -> {}",
+        name,
+        tool,
+        link_path.display(),
+        shared_dir.display()
+    );
     Ok(())
 }
 
@@ -857,6 +870,14 @@ pub struct ScannedItem {
     pub name: String,
     pub managed: bool,
     pub preview: String,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub distribution_scope: Option<String>,
+    #[serde(default)]
+    pub supported_tools: Vec<String>,
+    #[serde(default)]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -866,6 +887,57 @@ pub struct ScannedMarkdown {
     pub has_managed_block: bool,
     pub user_content_lines: u32,
     pub managed_content_lines: u32,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct SharedSkillRegistryEntry {
+    name: String,
+    path: String,
+    scope: String,
+    #[serde(default)]
+    agents: Vec<String>,
+}
+
+fn agent_name_to_tool(agent: &str) -> Option<&'static str> {
+    match agent.trim().to_ascii_lowercase().as_str() {
+        "claude code" => Some("claude-code"),
+        "codex" => Some("codex"),
+        "cursor" => Some("cursor"),
+        "windsurf" => Some("windsurf"),
+        "opencode" => Some("opencode"),
+        _ => None,
+    }
+}
+
+fn registry_supported_tools(entry: &SharedSkillRegistryEntry) -> Vec<String> {
+    let mut tools = entry
+        .agents
+        .iter()
+        .filter_map(|agent| agent_name_to_tool(agent))
+        .map(|tool| tool.to_string())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    tools.sort();
+    tools
+}
+
+fn load_shared_skill_registry() -> Vec<SharedSkillRegistryEntry> {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    if !home.join(".agents/skills").exists() {
+        return Vec::new();
+    }
+
+    let output = match Command::new("npx")
+        .args(["--no-install", "skills", "list", "-g", "--json"])
+        .output()
+    {
+        Ok(output) if output.status.success() => output,
+        _ => return Vec::new(),
+    };
+
+    serde_json::from_slice::<Vec<SharedSkillRegistryEntry>>(&output.stdout).unwrap_or_default()
 }
 
 /// Read an MCP config file and return a list of ScannedMcp entries.
@@ -949,6 +1021,10 @@ fn scan_file_items(dir: &PathBuf, extensions: &[&str]) -> Vec<ScannedItem> {
                 name,
                 managed,
                 preview,
+                scope: None,
+                distribution_scope: Some("tool".to_string()),
+                supported_tools: Vec::new(),
+                path: Some(path.to_string_lossy().to_string()),
             });
         }
     }
@@ -956,7 +1032,11 @@ fn scan_file_items(dir: &PathBuf, extensions: &[&str]) -> Vec<ScannedItem> {
 }
 
 /// Scan the skills directory (handles dirs with SKILL.md, plain .md files, and symlinks).
-fn scan_skills(dir: &PathBuf) -> Vec<ScannedItem> {
+fn scan_skills(
+    dir: &PathBuf,
+    tool: &str,
+    shared_registry: &HashMap<String, SharedSkillRegistryEntry>,
+) -> Vec<ScannedItem> {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return Vec::new(),
@@ -994,14 +1074,127 @@ fn scan_skills(dir: &PathBuf) -> Vec<ScannedItem> {
             } else {
                 content.clone()
             };
+            let resolved_path = fs::canonicalize(&path)
+                .or_else(|_| fs::canonicalize(&content_path))
+                .ok();
+            let resolved_in_shared_registry = resolved_path
+                .as_ref()
+                .map_or(false, |resolved| resolved.to_string_lossy().contains("/.agents/skills/"));
+            let registry_entry = shared_registry.get(&skill_name);
+            let supported_tools = registry_entry
+                .map(registry_supported_tools)
+                .filter(|tools| !tools.is_empty())
+                .unwrap_or_else(|| vec![tool.to_string()]);
+            let scope = if registry_entry
+                .map(|entry| entry.scope.eq_ignore_ascii_case("global"))
+                .unwrap_or(false)
+                || resolved_in_shared_registry
+            {
+                Some("user".to_string())
+            } else {
+                None
+            };
+            let source_path = registry_entry
+                .map(|entry| entry.path.clone())
+                .or_else(|| {
+                    resolved_path
+                        .as_ref()
+                        .map(|resolved| resolved.to_string_lossy().to_string())
+                })
+                .or_else(|| Some(content_path.to_string_lossy().to_string()));
             items.push(ScannedItem {
                 name: skill_name,
                 managed,
                 preview,
+                scope,
+                distribution_scope: Some(
+                    if registry_entry.is_some() || resolved_in_shared_registry {
+                        "shared".to_string()
+                    } else {
+                        "tool".to_string()
+                    },
+                ),
+                supported_tools,
+                path: source_path,
             });
         }
     }
     items
+}
+
+fn scan_global_skills_for_tool(
+    tool: &str,
+    shared_registry: &[SharedSkillRegistryEntry],
+) -> Vec<ScannedItem> {
+    let mut items = Vec::new();
+
+    for entry in shared_registry {
+        let supported_tools = registry_supported_tools(entry);
+        if !supported_tools.iter().any(|candidate| candidate == tool) {
+            continue;
+        }
+
+        let skill_md = PathBuf::from(&entry.path).join("SKILL.md");
+        let Ok(content) = fs::read_to_string(&skill_md) else {
+            continue;
+        };
+        let preview = if content.len() > 100 {
+            content[..100].to_string()
+        } else {
+            content.clone()
+        };
+
+        items.push(ScannedItem {
+            name: entry.name.clone(),
+            managed: content.contains("<!-- managed_by: lfc -->"),
+            preview,
+            scope: Some("user".to_string()),
+            distribution_scope: Some("shared".to_string()),
+            supported_tools,
+            path: Some(entry.path.clone()),
+        });
+    }
+
+    items
+}
+
+fn dedupe_scanned_items(items: Vec<ScannedItem>) -> Vec<ScannedItem> {
+    let mut by_name: HashMap<String, ScannedItem> = HashMap::new();
+
+    for item in items {
+        by_name
+            .entry(item.name.clone())
+            .and_modify(|existing| {
+                existing.managed = existing.managed || item.managed;
+                if existing.preview.is_empty() && !item.preview.is_empty() {
+                    existing.preview = item.preview.clone();
+                }
+                if existing.scope.is_none() && item.scope.is_some() {
+                    existing.scope = item.scope.clone();
+                }
+                if existing.distribution_scope.is_none() && item.distribution_scope.is_some() {
+                    existing.distribution_scope = item.distribution_scope.clone();
+                }
+                if existing.path.is_none() && item.path.is_some() {
+                    existing.path = item.path.clone();
+                }
+                let mut supported = existing
+                    .supported_tools
+                    .iter()
+                    .cloned()
+                    .chain(item.supported_tools.iter().cloned())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                supported.sort();
+                existing.supported_tools = supported;
+            })
+            .or_insert(item);
+    }
+
+    let mut merged = by_name.into_values().collect::<Vec<_>>();
+    merged.sort_by(|left, right| left.name.cmp(&right.name));
+    merged
 }
 
 /// Scan a markdown instructions file for lfc markers and count lines.
@@ -1040,6 +1233,12 @@ fn scan_markdown_instructions(path: &PathBuf) -> Option<ScannedMarkdown> {
 /// Perform a detailed scan of all known AI tools, returning what each has configured.
 pub fn scan_tools_detailed() -> Vec<ToolScan> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let shared_skill_registry = load_shared_skill_registry();
+    let shared_skill_map = shared_skill_registry
+        .iter()
+        .cloned()
+        .map(|entry| (entry.name.clone(), entry))
+        .collect::<HashMap<_, _>>();
 
     let tool_defs: Vec<(&str, &str, PathBuf)> = vec![
         ("claude-desktop", "Claude Desktop", home.join("Library/Application Support/Claude")),
@@ -1047,6 +1246,7 @@ pub fn scan_tools_detailed() -> Vec<ToolScan> {
         ("cursor", "Cursor", home.join(".cursor")),
         ("codex", "Codex", home.join(".codex")),
         ("windsurf", "Windsurf", home.join(".codeium/windsurf")),
+        ("opencode", "OpenCode", home.join(".opencode")),
     ];
 
     let mut results = Vec::new();
@@ -1064,10 +1264,11 @@ pub fn scan_tools_detailed() -> Vec<ToolScan> {
             Vec::new()
         };
 
-        let skills = match id {
-            "claude-code" => scan_skills(&home.join(".claude/skills")),
-            _ => Vec::new(),
-        };
+        let mut skills = tool_skills_dir(id)
+            .map(|skills_dir| scan_skills(&skills_dir, id, &shared_skill_map))
+            .unwrap_or_default();
+        skills.extend(scan_global_skills_for_tool(id, &shared_skill_registry));
+        let skills = dedupe_scanned_items(skills);
 
         let agents = match id {
             "claude-code" => scan_file_items(&home.join(".claude/agents"), &["md"]),
@@ -1123,85 +1324,92 @@ pub fn scan_tools_detailed() -> Vec<ToolScan> {
     results
 }
 
-// ─── Apply sync response ────────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Process a sync response — write all configs to the correct locations.
-/// Skips tools that aren't in the known set (no error for unknown tools).
-pub fn apply_sync_response(response: &SyncResponse) -> Result<u32, String> {
-    let mut count = 0;
+    #[test]
+    fn write_skills_uses_shared_registry_and_tool_symlinks() {
+        let temp_home = std::env::temp_dir().join(format!(
+            "lfc-skill-sync-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        fs::create_dir_all(temp_home.join(".codex")).unwrap();
+        fs::create_dir_all(temp_home.join(".cursor")).unwrap();
+        fs::create_dir_all(temp_home.join(".codeium/windsurf")).unwrap();
+        fs::create_dir_all(temp_home.join(".opencode")).unwrap();
 
-    for config in &response.configs {
-        for tool in &config.target_tools {
-            // Skip unknown tools gracefully
-            let is_known_tool = mcp_config_path(tool).is_some()
-                || matches!(tool.as_str(), "claude-code" | "codex" | "cursor");
-            if !is_known_tool {
-                println!("[LFC] Skipping unknown tool: {}", tool);
-                continue;
-            }
+        let previous_home = std::env::var_os("HOME");
+        std::env::set_var("HOME", &temp_home);
 
-            match config.config_type.as_str() {
-                "mcp" => {
-                    let payload: McpServersPayload = serde_json::from_str(&config.content)
-                        .map_err(|e| format!("Parse MCP config error: {}", e))?;
-                    write_mcp_config(tool, &payload.servers)?;
-                    count += 1;
-                }
-                "instructions" => {
-                    write_markdown_config(tool, &config.content)?;
-                    count += 1;
-                }
-                "skills" => {
-                    if let Ok(skill) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                        let name = skill["name"].as_str().unwrap_or("unnamed");
-                        let content = skill["content"].as_str().unwrap_or("");
-                        write_skills(tool, name, content)?;
-                        count += 1;
-                    }
-                }
-                "agents" => {
-                    if let Ok(agent) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                        let name = agent["name"].as_str().unwrap_or("unnamed");
-                        let content = agent["content"].as_str().unwrap_or("");
-                        write_agents(tool, name, content)?;
-                        count += 1;
-                    }
-                }
-                "rules" => {
-                    if tool == "cursor" {
-                        // Check if the content is JSON (named rule) or plain text (inline rules)
-                        if let Ok(rule) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                            if rule.get("name").is_some() {
-                                // Named rule file — write to .cursor/rules/lfc-{name}.mdc
-                                let name = rule["name"].as_str().unwrap_or("unnamed");
-                                let content = rule["content"].as_str().unwrap_or("");
-                                write_rules(tool, name, content)?;
-                            } else if rule.get("content").is_some() {
-                                // Inline rules — write to .cursorrules with markers
-                                let content = rule["content"].as_str().unwrap_or("");
-                                write_cursor_rules(content)?;
-                            }
-                        } else {
-                            // Plain text content — write to .cursorrules with markers
-                            write_cursor_rules(&config.content)?;
-                        }
-                        count += 1;
-                    } else {
-                        // claude-code rules: JSON with name/content
-                        if let Ok(rule) = serde_json::from_str::<serde_json::Value>(&config.content) {
-                            let name = rule["name"].as_str().unwrap_or("unnamed");
-                            let content = rule["content"].as_str().unwrap_or("");
-                            write_rules(tool, name, content)?;
-                            count += 1;
-                        }
-                    }
-                }
-                _ => {
-                    println!("[LFC] Skipping unsupported config type: {}", config.config_type);
-                }
-            }
+        write_skills("codex", "team-defaults", "Always run tests first.").unwrap();
+        write_skills("cursor", "team-defaults", "Always run tests first.").unwrap();
+        write_skills("windsurf", "team-defaults", "Always run tests first.").unwrap();
+        write_skills("opencode", "team-defaults", "Always run tests first.").unwrap();
+
+        let shared_root = fs::canonicalize(temp_home.join(".agents/skills/lfc-team-defaults")).unwrap();
+        let shared_skill = shared_root.join("SKILL.md");
+        assert!(shared_skill.exists(), "expected shared skill root to exist");
+        assert!(fs::read_to_string(&shared_skill)
+            .unwrap()
+            .contains("<!-- managed_by: lfc -->"));
+
+        for link_path in [
+            temp_home.join(".codex/skills/lfc-team-defaults"),
+            temp_home.join(".cursor/skills/lfc-team-defaults"),
+            temp_home.join(".codeium/windsurf/skills/lfc-team-defaults"),
+            temp_home.join(".opencode/skills/lfc-team-defaults"),
+        ] {
+            let meta = fs::symlink_metadata(&link_path).unwrap();
+            assert!(meta.file_type().is_symlink(), "expected {} to be a symlink", link_path.display());
+            assert_eq!(fs::canonicalize(&link_path).unwrap(), shared_root);
         }
+
+        if let Some(value) = previous_home {
+            std::env::set_var("HOME", value);
+        } else {
+            std::env::remove_var("HOME");
+        }
+
+        fs::remove_dir_all(temp_home).ok();
     }
 
-    Ok(count)
+    #[test]
+    fn scan_global_skills_marks_shared_distribution_scope() {
+        let registry = vec![SharedSkillRegistryEntry {
+            name: "frontend-design".to_string(),
+            path: "/Users/example/.agents/skills/frontend-design".to_string(),
+            scope: "global".to_string(),
+            agents: vec!["Claude Code".to_string(), "Cursor".to_string(), "OpenCode".to_string()],
+        }];
+        let temp_root = std::env::temp_dir().join(format!(
+            "lfc-scan-global-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let skill_root = temp_root.join("frontend-design");
+        fs::create_dir_all(&skill_root).unwrap();
+        fs::write(skill_root.join("SKILL.md"), "# Frontend Design").unwrap();
+
+        let items = scan_global_skills_for_tool(
+            "opencode",
+            &[SharedSkillRegistryEntry {
+                path: skill_root.to_string_lossy().to_string(),
+                ..registry[0].clone()
+            }],
+        );
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].distribution_scope.as_deref(), Some("shared"));
+        assert_eq!(items[0].scope.as_deref(), Some("user"));
+        assert!(items[0].supported_tools.iter().any(|tool| tool == "opencode"));
+
+        fs::remove_dir_all(temp_root).ok();
+    }
 }

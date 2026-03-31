@@ -1,49 +1,56 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
+import StatusBadge from "@/components/StatusBadge";
+import ToolToggleButton from "@/components/ToolToggleButton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import * as api from "@/lib/api";
+import { TOOL_LABELS, TOOL_OPTIONS } from "@/lib/dashboard";
+import { cn } from "@/lib/utils";
+
 import { useAuth } from "../lib/auth";
-import * as api from "../lib/api";
-
-const TOOL_LABELS: Record<string, string> = {
-  "claude-desktop": "Claude Desktop",
-  "claude-code": "Claude Code",
-  cursor: "Cursor",
-  codex: "Codex",
-  windsurf: "Windsurf",
-  opencode: "OpenCode",
-};
-
-const TOOL_COLORS: Record<string, { bg: string; text: string }> = {
-  "claude-desktop": { bg: "#fff7ed", text: "#c2410c" },
-  "claude-code": { bg: "#faf5ff", text: "#7c3aed" },
-  cursor: { bg: "#eff6ff", text: "#2563eb" },
-  codex: { bg: "#f0fdf4", text: "#16a34a" },
-  windsurf: { bg: "#f0fdfa", text: "#0d9488" },
-  opencode: { bg: "#fdf2f8", text: "#db2777" },
-};
 
 export default function Profiles() {
   const { user } = useAuth();
-  const [profiles, setProfiles] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<api.Profile[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [newProfile, setNewProfile] = useState({ name: "", description: "", tools: [] as string[] });
+  const [newProfile, setNewProfile] = useState({
+    name: "",
+    description: "",
+    tools: [] as string[],
+  });
   const [error, setError] = useState("");
 
-  // Org creation state (shown if user has no org)
   const [newOrg, setNewOrg] = useState({ name: "", slug: "" });
-  const [suggestedOrgs, setSuggestedOrgs] = useState<{ orgId: string; orgName: string; memberCount: number }[]>([]);
+  const [suggestedOrgs, setSuggestedOrgs] = useState<
+    { orgId: string; orgName: string; memberCount: number }[]
+  >([]);
   const [inviteCode, setInviteCode] = useState("");
   const [joiningByCode, setJoiningByCode] = useState(false);
 
   useEffect(() => {
     if (user?.orgId) {
-      loadProfiles();
-    } else {
-      const suggestion = sessionStorage.getItem("lfc_suggested_orgs");
-      if (suggestion) {
-        setSuggestedOrgs(JSON.parse(suggestion));
-        sessionStorage.removeItem("lfc_suggested_orgs");
-      }
+      void loadProfiles();
+      return;
     }
+
+    const suggestion = sessionStorage.getItem("lfc_suggested_orgs");
+    if (!suggestion) return;
+    setSuggestedOrgs(JSON.parse(suggestion));
+    sessionStorage.removeItem("lfc_suggested_orgs");
   }, [user]);
 
   const loadProfiles = async () => {
@@ -52,9 +59,10 @@ export default function Profiles() {
     setProfiles(data.profiles);
   };
 
-  const handleCreateOrg = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateOrg = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
+
     try {
       await api.createOrg(newOrg.name, newOrg.slug);
       window.location.reload();
@@ -63,10 +71,11 @@ export default function Profiles() {
     }
   };
 
-  const handleJoinByCode = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleJoinByCode = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
     setJoiningByCode(true);
+
     try {
       await api.acceptInvite(inviteCode.trim());
       window.location.reload();
@@ -77,207 +86,296 @@ export default function Profiles() {
     }
   };
 
-  if (!user?.orgId) {
-    return (
-      <div className="max-w-[460px] mx-auto pt-12">
-        <h1 className="page-title">Get started</h1>
-        <p className="page-subtitle mb-8">Join an existing organization or create a new one.</p>
-
-        {suggestedOrgs.length > 0 && (
-          <div
-            className="card p-5 mb-6"
-            style={{ borderColor: "var(--color-accent)", background: "var(--color-accent-subtle)" }}
-          >
-            <div className="text-[14px] font-medium mb-1" style={{ color: "var(--color-text-primary)" }}>
-              {suggestedOrgs.length === 1
-                ? "Your team may already be on LFC"
-                : `${suggestedOrgs.length} teams from your company are on LFC`}
-            </div>
-            <div className="text-[13px] mb-1" style={{ color: "var(--color-text-secondary)" }}>
-              Ask your admin for an invite link to join.
-            </div>
-            <div className="mt-3 space-y-1.5">
-              {suggestedOrgs.map((org) => (
-                <div
-                  key={org.orgId}
-                  className="flex items-center justify-between px-3 py-2 rounded-md"
-                  style={{ background: "rgba(255,255,255,0.6)" }}
-                >
-                  <span className="text-[13px] font-medium" style={{ color: "var(--color-text-primary)" }}>{org.orgName}</span>
-                  <span className="text-[12px]" style={{ color: "var(--color-text-tertiary)" }}>{org.memberCount} member{org.memberCount !== 1 ? "s" : ""}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="card p-5 mb-4">
-          <div className="text-[15px] font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>Join with invite code</div>
-          <div className="text-[13px] mb-4" style={{ color: "var(--color-text-tertiary)" }}>Got an invite link from your team admin? Paste the code here.</div>
-          <form onSubmit={handleJoinByCode} className="flex gap-2">
-            <input type="text" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="e.g., acme-invite-2024" className="input-base flex-1 font-mono" required />
-            <button type="submit" disabled={joiningByCode} className="btn-primary shrink-0">{joiningByCode ? "Joining..." : "Join"}</button>
-          </form>
-        </div>
-
-        <div className="flex items-center gap-4 my-6">
-          <div className="flex-1 h-px" style={{ background: "var(--color-border)" }} />
-          <span className="text-[12px] font-medium" style={{ color: "var(--color-text-tertiary)" }}>OR</span>
-          <div className="flex-1 h-px" style={{ background: "var(--color-border)" }} />
-        </div>
-
-        <div className="card p-5">
-          <div className="text-[15px] font-semibold mb-1" style={{ color: "var(--color-text-primary)" }}>Create a new organization</div>
-          <div className="text-[13px] mb-4" style={{ color: "var(--color-text-tertiary)" }}>You'll be the admin. Invite your team after setup.</div>
-          <form onSubmit={handleCreateOrg} className="space-y-4">
-            {error && (
-              <div className="p-3 rounded-lg text-[13px]" style={{ background: "var(--color-danger-subtle)", color: "var(--color-danger)" }}>{error}</div>
-            )}
-            <div>
-              <label className="label">Organization name</label>
-              <input type="text" value={newOrg.name} onChange={(e) => setNewOrg({ ...newOrg, name: e.target.value })} placeholder="Acme Corp" className="input-base" required />
-            </div>
-            <div>
-              <label className="label">URL slug</label>
-              <input type="text" value={newOrg.slug} onChange={(e) => setNewOrg({ ...newOrg, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} placeholder="acme" className="input-base font-mono" required />
-            </div>
-            <button type="submit" className="btn-primary w-full">Create organization</button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
     if (!user?.orgId) return;
+
     try {
       await api.createProfile(user.orgId, newProfile);
       setShowCreate(false);
       setNewProfile({ name: "", description: "", tools: [] });
-      loadProfiles();
+      await loadProfiles();
     } catch (err: any) {
       setError(err.message);
     }
   };
 
   const toggleTool = (tool: string) => {
-    setNewProfile((p) => ({
-      ...p,
-      tools: p.tools.includes(tool) ? p.tools.filter((t) => t !== tool) : [...p.tools, tool],
+    setNewProfile((current) => ({
+      ...current,
+      tools: current.tools.includes(tool)
+        ? current.tools.filter((value) => value !== tool)
+        : [...current.tools, tool],
     }));
   };
 
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="page-title">Profiles</h1>
-          <p className="page-subtitle">Config bundles assigned to your team</p>
+  if (!user?.orgId) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6 pt-8">
+        <PageHeader
+          title="Get started"
+          subtitle="Join an existing organization with an invite code, or create a new one to start managing shared artifacts."
+        />
+
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {suggestedOrgs.length > 0 ? (
+          <Card className="py-0">
+            <CardHeader className="border-b py-5">
+              <CardTitle>
+                {suggestedOrgs.length === 1
+                  ? "Your team may already be on LFC"
+                  : `${suggestedOrgs.length} teams from your company are already here`}
+              </CardTitle>
+              <CardDescription>
+                Ask an admin for an invite link if you should join one of these workspaces.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 py-5">
+              {suggestedOrgs.map((org) => (
+                <div
+                  key={org.orgId}
+                  className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3"
+                >
+                  <div className="text-sm font-medium text-foreground">{org.orgName}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {org.memberCount} member{org.memberCount !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        <Card className="py-0">
+          <CardHeader className="border-b py-5">
+            <CardTitle>Join with invite code</CardTitle>
+            <CardDescription>
+              Paste the code from your team&apos;s invite link to attach your account to an
+              existing organization.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="py-5">
+            <form onSubmit={handleJoinByCode} className="flex flex-col gap-3 sm:flex-row">
+              <Input
+                value={inviteCode}
+                onChange={(event) => setInviteCode(event.target.value)}
+                placeholder="acme-invite-2024"
+                className="font-mono"
+                required
+              />
+              <Button type="submit" disabled={joiningByCode}>
+                {joiningByCode ? "Joining..." : "Join"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <div className="flex items-center gap-4">
+          <Separator className="flex-1" />
+          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            or
+          </span>
+          <Separator className="flex-1" />
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          New profile
-        </button>
+
+        <Card className="py-0">
+          <CardHeader className="border-b py-5">
+            <CardTitle>Create a new organization</CardTitle>
+            <CardDescription>
+              You&apos;ll be the first admin and can invite the rest of the team after setup.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="py-5">
+            <form onSubmit={handleCreateOrg} className="space-y-4">
+              <div>
+                <Label htmlFor="org-name">Organization name</Label>
+                <Input
+                  id="org-name"
+                  value={newOrg.name}
+                  onChange={(event) =>
+                    setNewOrg((current) => ({ ...current, name: event.target.value }))
+                  }
+                  className="mt-2"
+                  placeholder="Acme Corp"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="org-slug">URL slug</Label>
+                <Input
+                  id="org-slug"
+                  value={newOrg.slug}
+                  onChange={(event) =>
+                    setNewOrg((current) => ({
+                      ...current,
+                      slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
+                    }))
+                  }
+                  className="mt-2 font-mono"
+                  placeholder="acme"
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                Create organization
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
+    );
+  }
 
-      {showCreate && (
-        <div className="card p-5 mb-6">
-          <div className="text-[15px] font-semibold mb-4" style={{ color: "var(--color-text-primary)" }}>
-            Create profile
-          </div>
-          <form onSubmit={handleCreate} className="space-y-4">
-            {error && (
-              <div className="p-3 rounded-lg text-[13px]" style={{ background: "var(--color-danger-subtle)", color: "var(--color-danger)" }}>
-                {error}
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Profiles"
+        subtitle="Profiles are assignment targets. Give each team the artifacts and tools they should receive."
+        action={<Button onClick={() => setShowCreate((value) => !value)}>{showCreate ? "Close" : "New profile"}</Button>}
+      />
+
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {showCreate ? (
+        <Card className="py-0">
+          <CardHeader className="border-b py-5">
+            <CardTitle>Create profile</CardTitle>
+            <CardDescription>
+              Define a target group and the tools that should receive its assigned artifacts.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="py-5">
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <Label htmlFor="profile-name">Name</Label>
+                <Input
+                  id="profile-name"
+                  value={newProfile.name}
+                  onChange={(event) =>
+                    setNewProfile((current) => ({ ...current, name: event.target.value }))
+                  }
+                  className="mt-2"
+                  placeholder="Backend team"
+                  required
+                />
               </div>
-            )}
 
-            <div>
-              <label className="label">Name</label>
-              <input type="text" value={newProfile.name} onChange={(e) => setNewProfile({ ...newProfile, name: e.target.value })} placeholder="e.g., Backend Team" className="input-base" required />
-            </div>
+              <div>
+                <Label htmlFor="profile-description">Description</Label>
+                <Input
+                  id="profile-description"
+                  value={newProfile.description}
+                  onChange={(event) =>
+                    setNewProfile((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  className="mt-2"
+                  placeholder="Optional"
+                />
+              </div>
 
-            <div>
-              <label className="label">Description</label>
-              <input type="text" value={newProfile.description} onChange={(e) => setNewProfile({ ...newProfile, description: e.target.value })} placeholder="Optional" className="input-base" />
-            </div>
+              <div className="space-y-3">
+                <Label>Target tools</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {TOOL_OPTIONS.map((tool) => {
+                    const selected = newProfile.tools.includes(tool.value);
+                    return (
+                      <ToolToggleButton
+                        key={tool.value}
+                        label={tool.label}
+                        selected={selected}
+                        onClick={() => toggleTool(tool.value)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
 
-            <div>
-              <label className="label">Target tools</label>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(TOOL_LABELS).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => toggleTool(key)}
-                    className="px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all cursor-pointer"
-                    style={{
-                      background: newProfile.tools.includes(key) ? "var(--color-text-primary)" : "var(--color-surface)",
-                      color: newProfile.tools.includes(key) ? "var(--color-text-inverse)" : "var(--color-text-secondary)",
-                      borderColor: newProfile.tools.includes(key) ? "var(--color-text-primary)" : "var(--color-border)",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
+                <Button type="submit">Create</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowCreate(false)}
+                >
+                  Cancel
+                </Button>
               </div>
-            </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : null}
 
-            <div className="flex gap-2 pt-1">
-              <button type="submit" className="btn-primary">Create</button>
-              <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
-            </div>
-          </form>
+      {profiles.length === 0 ? (
+        <EmptyState
+          title="No profiles yet"
+          description="Create a profile first, then assign approved artifacts to it."
+          action={<Button onClick={() => setShowCreate(true)}>Create profile</Button>}
+        />
+      ) : (
+        <div className="grid gap-4">
+          {profiles.map((profile) => (
+            <Link
+              key={profile.id}
+              to={`/app/profiles/${profile.id}`}
+              className="group block"
+            >
+              <Card className="py-0 transition-colors group-hover:bg-muted/20">
+                <CardContent className="space-y-4 py-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <div className="text-base font-medium text-foreground">{profile.name}</div>
+                      {profile.description ? (
+                        <div className="text-sm text-muted-foreground">
+                          {profile.description}
+                        </div>
+                      ) : null}
+                    </div>
+                    <StatusBadge tone="neutral">
+                      {profile.assignmentCount || 0} assignment
+                      {profile.assignmentCount === 1 ? "" : "s"}
+                    </StatusBadge>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {profile.tools.length > 0 ? (
+                      profile.tools.map((tool) => (
+                        <StatusBadge key={tool} tone="neutral">
+                          {TOOL_LABELS[tool] || tool}
+                        </StatusBadge>
+                      ))
+                    ) : (
+                      <StatusBadge tone="warning">No target tools selected</StatusBadge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
         </div>
       )}
 
-      <div className="space-y-3">
-        {profiles.map((profile) => (
-          <Link
-            key={profile.id}
-            to={`/app/profiles/${profile.id}`}
-            className="card p-5 block hover:border-[var(--color-text-tertiary)] transition-colors"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[15px] font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                  {profile.name}
-                </div>
-                {profile.description && (
-                  <div className="text-[13px] mt-0.5" style={{ color: "var(--color-text-tertiary)" }}>
-                    {profile.description}
-                  </div>
-                )}
-              </div>
-              <div className="text-[12px] font-medium tabular-nums" style={{ color: "var(--color-text-tertiary)" }}>
-                {profile.configCount} config{profile.configCount !== 1 ? "s" : ""}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {profile.tools.map((tool: string) => {
-                const colors = TOOL_COLORS[tool] || { bg: "#f4f4f5", text: "#52525b" };
-                return (
-                  <span
-                    key={tool}
-                    className="badge"
-                    style={{ background: colors.bg, color: colors.text }}
-                  >
-                    {TOOL_LABELS[tool] || tool}
-                  </span>
-                );
-              })}
-            </div>
-          </Link>
-        ))}
-
-        {profiles.length === 0 && !showCreate && (
-          <div className="card p-12 text-center">
-            <div className="text-[14px]" style={{ color: "var(--color-text-tertiary)" }}>
-              No profiles yet. Create one to get started.
-            </div>
-          </div>
-        )}
+      <div className="text-sm text-muted-foreground">
+        Need an invite link? Use{" "}
+        <Link
+          to="/app/fleet"
+          className={cn(buttonVariants({ variant: "link", size: "sm" }), "h-auto px-0")}
+        >
+          Fleet
+        </Link>{" "}
+        to generate one for new teammates.
       </div>
     </div>
   );

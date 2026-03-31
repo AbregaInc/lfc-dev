@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profiles from "./pages/Profiles";
 import ProfileDetail from "./pages/ProfileDetail";
+import Artifacts from "./pages/Artifacts";
 import Secrets from "./pages/Secrets";
 import Suggestions from "./pages/Suggestions";
 import AuditLog from "./pages/AuditLog";
@@ -30,9 +31,12 @@ export default function App() {
                   <Route path="/" element={<Profiles />} />
                   <Route path="/profiles" element={<Navigate to="/app" />} />
                   <Route path="/profiles/:id" element={<ProfileDetail />} />
+                  <Route path="/artifacts" element={<Artifacts />} />
                   <Route path="/secrets" element={<Secrets />} />
-                  <Route path="/suggestions" element={<Suggestions />} />
-                  <Route path="/team" element={<Team />} />
+                  <Route path="/submissions" element={<Suggestions />} />
+                  <Route path="/fleet" element={<Team />} />
+                  <Route path="/suggestions" element={<Navigate to="/app/submissions" replace />} />
+                  <Route path="/team" element={<Navigate to="/app/fleet" replace />} />
                   <Route path="/audit" element={<AuditLog />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/app" />} />

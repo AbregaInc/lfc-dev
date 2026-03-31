@@ -1,28 +1,48 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../lib/auth";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import * as api from "../lib/api";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+
+import StatusBadge from "@/components/StatusBadge";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import * as api from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+import { useAuth } from "../lib/auth";
 
 const navItems = [
   { to: "/app", label: "Profiles", end: true },
+  { to: "/app/artifacts", label: "Artifacts" },
+  { to: "/app/submissions", label: "Submissions", badgeKey: "suggestions" as const },
+  { to: "/app/fleet", label: "Fleet" },
   { to: "/app/secrets", label: "Secrets" },
-  { to: "/app/team", label: "Team" },
-  { to: "/app/suggestions", label: "Suggestions", badgeKey: "suggestions" as const },
   { to: "/app/audit", label: "Audit Log" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [suggestionCount, setSuggestionCount] = useState(0);
 
   useEffect(() => {
-    if (user?.orgId) {
-      api.getSuggestionCount(user.orgId)
+    const loadCount = () => {
+      if (!user?.orgId) return;
+      api
+        .getSuggestionCount(user.orgId)
         .then((data) => setSuggestionCount(data.count))
         .catch(() => {});
-    }
+    };
+
+    loadCount();
+    window.addEventListener("lfc:submissions-changed", loadCount);
+    return () => window.removeEventListener("lfc:submissions-changed", loadCount);
   }, [user?.orgId]);
 
   const handleLogout = () => {
@@ -31,79 +51,144 @@ export default function Layout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen" style={{ background: "var(--color-surface-sunken)" }}>
-      {/* Sidebar */}
-      <aside
-        className="w-[200px] flex flex-col shrink-0"
-        style={{ background: "var(--color-surface)", borderRight: "1px solid var(--color-border)" }}
-      >
-        {/* Brand */}
-        <div className="px-4 pt-5 pb-4">
-          <span
-            className="text-[13px] font-bold tracking-tight"
-            style={{ color: "var(--color-accent-text)" }}
-          >
-            LFC
-          </span>
-        </div>
+    <div className="min-h-screen bg-muted/30">
+      <div className="grid min-h-screen lg:grid-cols-[260px_1fr]">
+        <aside className="hidden border-r bg-background lg:block">
+          <div className="sticky top-0 flex min-h-screen flex-col p-4">
+            <Card className="py-0">
+              <CardHeader className="gap-2 border-b py-4">
+                <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  LFC
+                </div>
+                <CardTitle>Artifact control</CardTitle>
+                <CardDescription>
+                  Profiles, releases, approvals, and device health in one place.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="py-4">
+                <nav className="space-y-1">
+                  {navItems.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={"end" in item}
+                      className={({ isActive }) =>
+                        cn(
+                          buttonVariants({
+                            variant: isActive ? "secondary" : "ghost",
+                            size: "sm",
+                          }),
+                          "w-full justify-between"
+                        )
+                      }
+                    >
+                      <span>{item.label}</span>
+                      {"badgeKey" in item && suggestionCount > 0 ? (
+                        <StatusBadge
+                          tone="info"
+                          className="h-5 min-w-5 justify-center px-1.5 tabular-nums"
+                        >
+                          {suggestionCount}
+                        </StatusBadge>
+                      ) : null}
+                    </NavLink>
+                  ))}
+                </nav>
+              </CardContent>
+            </Card>
 
-        {/* Nav */}
-        <nav className="flex-1 px-2 space-y-px">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={"end" in item}
-              className={({ isActive }) =>
-                `flex items-center justify-between px-3 py-[6px] rounded text-[13px] transition-colors ${
-                  isActive
-                    ? "text-[var(--color-text-primary)] bg-[var(--color-surface-overlay)]"
-                    : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
-                }`
-              }
-            >
-              <span>{item.label}</span>
-              {"badgeKey" in item && suggestionCount > 0 && (
-                <span
-                  className="text-[10px] font-semibold px-1.5 rounded leading-[16px] tabular-nums"
-                  style={{ background: "var(--color-accent-subtle)", color: "var(--color-accent-text)" }}
+            <Card className="mt-auto py-0">
+              <CardContent className="space-y-3 py-4">
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground">Signed in</div>
+                  <div className="truncate text-sm text-foreground">{user?.email}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <NavLink
+                    to="/app/settings"
+                    className={buttonVariants({ variant: "ghost", size: "sm" })}
+                  >
+                    Settings
+                  </NavLink>
+                  <button
+                    onClick={handleLogout}
+                    className={cn(
+                      buttonVariants({ variant: "ghost", size: "sm" }),
+                      "cursor-pointer"
+                    )}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </aside>
+
+        <div className="min-w-0">
+          <header className="border-b bg-background lg:hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  LFC
+                </div>
+                <div className="truncate text-sm font-medium text-foreground">{user?.email}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <NavLink
+                  to="/app/settings"
+                  className={buttonVariants({ variant: "ghost", size: "sm" })}
                 >
-                  {suggestionCount}
-                </span>
-              )}
-            </NavLink>
-          ))}
-        </nav>
+                  Settings
+                </NavLink>
+                <button
+                  onClick={handleLogout}
+                  className={cn(
+                    buttonVariants({ variant: "ghost", size: "sm" }),
+                    "cursor-pointer"
+                  )}
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+            <nav className="flex gap-2 overflow-x-auto px-4 pb-3">
+              {navItems.map((item) => {
+                const isActive = item.end
+                  ? location.pathname === item.to
+                  : location.pathname.startsWith(item.to);
 
-        {/* User */}
-        <div className="px-3 py-3" style={{ borderTop: "1px solid var(--color-border)" }}>
-          <div className="text-[12px] truncate" style={{ color: "var(--color-text-secondary)" }}>
-            {user?.email}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <NavLink
-              to="/app/settings"
-              className="text-[11px]"
-              style={{ color: "var(--color-text-tertiary)", textDecoration: "none" }}
-            >
-              Settings
-            </NavLink>
-            <span className="text-[11px]" style={{ color: "var(--color-border)" }}>·</span>
-            <button
-              onClick={handleLogout}
-              className="text-[11px] cursor-pointer border-none bg-transparent p-0"
-              style={{ color: "var(--color-text-tertiary)" }}
-            >
-              Sign out
-            </button>
-          </div>
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={"end" in item}
+                    className={cn(
+                      buttonVariants({
+                        variant: isActive ? "secondary" : "ghost",
+                        size: "sm",
+                      }),
+                      "shrink-0"
+                    )}
+                  >
+                    <span>{item.label}</span>
+                    {"badgeKey" in item && suggestionCount > 0 ? (
+                      <StatusBadge
+                        tone="info"
+                        className="ml-1 h-5 min-w-5 justify-center px-1.5 tabular-nums"
+                      >
+                        {suggestionCount}
+                      </StatusBadge>
+                    ) : null}
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </header>
+
+          <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">{children}</main>
         </div>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-[880px] mx-auto px-8 py-8">{children}</div>
-      </main>
+      </div>
     </div>
   );
 }
