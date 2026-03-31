@@ -17,19 +17,19 @@
   --color-card-foreground: oklch(0.235 0.018 36);
   --color-popover: oklch(0.995 0.003 84);
   --color-popover-foreground: oklch(0.235 0.018 36);
-  --color-primary: rgb(212 160 23);
-  --color-primary-foreground: rgb(30 30 30);
-  --color-secondary: oklch(0.92 0.013 78);
-  --color-secondary-foreground: oklch(0.255 0.016 36);
-  --color-muted: oklch(0.95 0.009 78);
-  --color-muted-foreground: oklch(0.52 0.018 44);
-  --color-accent: oklch(0.93 0.016 70);
-  --color-accent-foreground: oklch(0.255 0.016 36);
-  --color-destructive: oklch(0.58 0.19 28);
+  --color-primary: rgb(200 16 46);
+  --color-primary-foreground: rgb(255 255 255);
+  --color-secondary: oklch(0.95 0.008 20);
+  --color-secondary-foreground: oklch(0.25 0.02 20);
+  --color-muted: oklch(0.96 0.005 20);
+  --color-muted-foreground: oklch(0.50 0.02 20);
+  --color-accent: oklch(0.94 0.01 20);
+  --color-accent-foreground: oklch(0.25 0.02 20);
+  --color-destructive: oklch(0.50 0.19 28);
   --color-destructive-foreground: oklch(0.985 0.004 84);
-  --color-border: oklch(0.83 0.012 76);
-  --color-input: oklch(0.89 0.01 76);
-  --color-ring: rgb(195 148 24);
+  --color-border: oklch(0.88 0.006 20);
+  --color-input: oklch(0.92 0.005 20);
+  --color-ring: rgb(170 14 40);
 }
 
 @layer base {

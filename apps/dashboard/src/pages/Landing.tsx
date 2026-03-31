@@ -10,122 +10,126 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 
 const GITHUB_DOWNLOAD = "https://github.com/AbregaInc/lfc-dev/releases/latest/download";
+
+function ToolLogo({ name, children }: { name: string; children?: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 text-muted-foreground" title={name}>
+      {children}
+      <span className="text-xs font-medium">{name}</span>
+    </div>
+  );
+}
+
+const iconClass = "h-5 w-5 fill-current";
+
+const supportedTools = [
+  {
+    name: "Claude Code",
+    icon: (
+      <svg viewBox="0 0 24 24" className={iconClass}>
+        <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Cursor",
+    icon: (
+      <svg viewBox="0 0 24 24" className={iconClass}>
+        <path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" />
+      </svg>
+    ),
+  },
+  {
+    name: "Claude Desktop",
+    icon: (
+      <svg viewBox="0 0 24 24" className={iconClass}>
+        <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Codex",
+    icon: (
+      <svg viewBox="0 0 24 24" className={iconClass}>
+        <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654 2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "Windsurf",
+    icon: (
+      <svg viewBox="0 0 24 24" className={iconClass}>
+        <path d="M23.55 5.067c-1.2038-.002-2.1806.973-2.1806 2.1765v4.8676c0 .972-.8035 1.7594-1.7597 1.7594-.568 0-1.1352-.286-1.4718-.7659l-4.9713-7.1003c-.4125-.5896-1.0837-.941-1.8103-.941-1.1334 0-2.1533.9635-2.1533 2.153v4.8957c0 .972-.7969 1.7594-1.7596 1.7594-.57 0-1.1363-.286-1.4728-.7658L.4076 5.1598C.2822 4.9798 0 5.0688 0 5.2882v4.2452c0 .2147.0656.4228.1884.599l5.4748 7.8183c.3234.462.8006.8052 1.3509.9298 1.3771.313 2.6446-.747 2.6446-2.0977v-4.893c0-.972.7875-1.7593 1.7596-1.7593h.003a1.798 1.798 0 0 1 1.4718.7658l4.9723 7.0994c.4135.5905 1.05.941 1.8093.941 1.1587 0 2.1515-.9645 2.1515-2.153v-4.8948c0-.972.7875-1.7594 1.7596-1.7594h.194a.22.22 0 0 0 .2204-.2202v-4.622a.22.22 0 0 0-.2203-.2203Z" />
+      </svg>
+    ),
+  },
+  {
+    name: "OpenCode",
+    icon: null,
+  },
+];
+
+const beforeAfter = {
+  before: [
+    "New hire copies MCP configs from a stale Notion doc",
+    "GITHUB_TOKEN pasted in Slack — stays in search forever",
+    "Half the team has Sentry, half doesn't know it exists",
+    "No one knows which skills or instructions are standard",
+    "Config breaks after an update — no one notices for a week",
+  ],
+  after: [
+    "New hire installs client, picks a profile, done in 2 minutes",
+    "Secrets resolve at install time — tokens never leave the dashboard",
+    "Approved tools push to every machine automatically",
+    "One source of truth, visible to the whole team",
+    "Fleet catches drift immediately",
+  ],
+};
 
 const setupSteps = [
   {
     step: "1",
-    title: "Create the workspace",
-    detail:
-      "Set up the org, define approved MCPs, shared skills, instructions, rules, and secrets in one place.",
-    meta: "Takes about 2 minutes",
+    title: "Define",
+    detail: "Pick MCPs, skills, instructions, rules. Group into profiles.",
   },
   {
     step: "2",
-    title: "Install the client",
-    detail:
-      "Each teammate installs the tray app once. LFC detects compatible tools, shared registry content, and the local files those tools already read.",
-    meta: "macOS and Windows",
+    title: "Install",
+    detail: "Tray app auto-detects AI tools. Previews before writing.",
   },
   {
     step: "3",
-    title: "Let it keep itself current",
-    detail:
-      "Approved changes sync in the background. Personal local entries stay intact, and Fleet shows what actually applied.",
-    meta: "Automatic sync and verification",
+    title: "Sync",
+    detail: "Changes push automatically. Personal configs untouched.",
   },
 ];
 
 const adminDefines = [
   { label: "MCP", tone: "success" as const, value: "github, postgres, sentry, jira" },
-  {
-    label: "Shared skills",
-    tone: "warning" as const,
-    value: "frontend-design, teach-impeccable, code-review",
-  },
+  { label: "Shared skills", tone: "warning" as const, value: "frontend-design, teach-impeccable, code-review" },
   { label: "Instructions", tone: "info" as const, value: "Acme coding standards" },
   { label: "Rules", tone: "neutral" as const, value: "TypeScript strict, named exports" },
   { label: "Secrets", tone: "warning" as const, value: "GITHUB_TOKEN, SENTRY_DSN" },
 ];
 
 const fileMap = [
-  {
-    tool: "Shared registry",
-    files: ["~/.agents/skills/"],
-  },
-  {
-    tool: "Claude Code",
-    files: [
-      "~/.claude.json",
-      "~/.claude/CLAUDE.md",
-      "~/.claude/skills/ → linked shared skills",
-      "~/.claude/rules/",
-      "~/.claude/agents/",
-    ],
-  },
-  {
-    tool: "Cursor",
-    files: [
-      "~/.cursor/mcp.json",
-      ".cursorrules",
-      ".cursor/rules/",
-      "~/.cursor/skills/ → linked shared skills",
-    ],
-  },
-  {
-    tool: "Claude Desktop",
-    files: ["~/Library/.../claude_desktop_config.json"],
-  },
-  {
-    tool: "Codex",
-    files: ["~/AGENTS.md", "~/.codex/mcp.json", "~/.codex/skills/ → linked shared skills"],
-  },
-  {
-    tool: "Windsurf",
-    files: [
-      "~/.codeium/windsurf/mcp_config.json",
-      "~/.codeium/windsurf/skills/ → linked shared skills",
-    ],
-  },
-  {
-    tool: "OpenCode",
-    files: ["~/.opencode/skills/ → linked shared skills"],
-  },
+  { tool: "Shared registry", files: ["~/.agents/skills/"] },
+  { tool: "Claude Code", files: ["~/.claude.json", "~/.claude/CLAUDE.md", "~/.claude/skills/", "~/.claude/rules/", "~/.claude/agents/"] },
+  { tool: "Cursor", files: ["~/.cursor/mcp.json", ".cursorrules", ".cursor/rules/", "~/.cursor/skills/"] },
+  { tool: "Claude Desktop", files: ["~/Library/.../claude_desktop_config.json"] },
+  { tool: "Codex", files: ["~/AGENTS.md", "~/.codex/mcp.json", "~/.codex/skills/"] },
+  { tool: "Windsurf", files: ["~/.codeium/windsurf/mcp_config.json", "~/.codeium/windsurf/skills/"] },
+  { tool: "OpenCode", files: ["~/.opencode/skills/"] },
 ];
 
 const managedEntries = [
-  {
-    name: "github",
-    command: "npx @modelcontextprotocol/server-github",
-    tone: "success" as const,
-    label: "lfc-managed",
-  },
-  {
-    name: "postgres",
-    command: "npx @modelcontextprotocol/server-postgres",
-    tone: "success" as const,
-    label: "lfc-managed",
-  },
-  {
-    name: "sentry",
-    command: "npx @sentry/mcp-server",
-    tone: "success" as const,
-    label: "lfc-managed",
-  },
-  {
-    name: "jira",
-    command: "npx @atlassian/mcp-jira",
-    tone: "success" as const,
-    label: "lfc-managed",
-  },
-  {
-    name: "gmail",
-    command: "npx @gongrzhe/server-gmail-autoauth-mcp",
-    tone: "warning" as const,
-    label: "yours",
-  },
+  { name: "github", command: "npx @modelcontextprotocol/server-github", tone: "success" as const, label: "lfc-managed" },
+  { name: "postgres", command: "npx @modelcontextprotocol/server-postgres", tone: "success" as const, label: "lfc-managed" },
+  { name: "sentry", command: "npx @sentry/mcp-server", tone: "success" as const, label: "lfc-managed" },
+  { name: "jira", command: "npx @atlassian/mcp-jira", tone: "success" as const, label: "lfc-managed" },
+  { name: "gmail", command: "npx @gongrzhe/server-gmail-autoauth-mcp", tone: "warning" as const, label: "yours" },
 ];
 
 const inventory = [
@@ -137,18 +141,10 @@ const inventory = [
 ];
 
 const reviewFlow = [
-  {
-    step: "1",
-    title: "Discover",
-    detail: "A developer finds a useful MCP, project instruction, or shared skill locally.",
-  },
-  {
-    step: "2",
-    title: "Suggest",
-    detail: "They submit that shared registry item or tool-local config back to the org.",
-  },
-  { step: "3", title: "Review", detail: "An admin approves it and assigns it to profiles." },
-  { step: "4", title: "Deploy", detail: "The release rolls out automatically to matching machines." },
+  { step: "1", title: "Discover", detail: "Dev finds a useful MCP or skill locally." },
+  { step: "2", title: "Suggest", detail: "Submits it back to the org." },
+  { step: "3", title: "Review", detail: "Admin approves, assigns to profiles." },
+  { step: "4", title: "Deploy", detail: "Rolls out to matching machines." },
 ];
 
 const auditEvents = [
@@ -160,41 +156,19 @@ const auditEvents = [
 ];
 
 const detectedTools = [
-  { name: "Shared registry", detail: "28 shared skills installed once and linked into compatible tools" },
-  { name: "Claude Code", detail: "4 MCPs, instructions, 29 linked shared skills, 2 agents" },
-  { name: "Cursor", detail: "1 MCP, 28 linked shared skills" },
+  { name: "Shared registry", detail: "28 skills installed once, linked into all tools" },
+  { name: "Claude Code", detail: "4 MCPs, 29 skills, 2 agents" },
+  { name: "Cursor", detail: "1 MCP, 28 skills" },
   { name: "Claude Desktop", detail: "3 MCPs" },
-  { name: "Codex", detail: "instructions, 28 linked shared skills" },
-  { name: "Windsurf", detail: "28 linked shared skills" },
-  { name: "OpenCode", detail: "28 linked shared skills" },
+  { name: "Codex", detail: "instructions, 28 skills" },
+  { name: "Windsurf", detail: "28 skills" },
+  { name: "OpenCode", detail: "28 skills" },
 ];
 
 const plans = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    detail: "Up to 5 users. All core features included.",
-    cta: "Start free",
-    featured: false,
-  },
-  {
-    name: "Team",
-    price: "$25",
-    period: "per user / year",
-    subline: "That's just $2.08/mo per user",
-    detail: "Up to 50 users. Priority support.",
-    cta: "Start team plan",
-    featured: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    detail: "SSO, SCIM, audit export, and self-hosted options.",
-    cta: "Talk to us",
-    featured: false,
-  },
+  { name: "Free", price: "$0", period: "forever", detail: "Up to 5 users. All features.", cta: "Start free", featured: false },
+  { name: "Team", price: "$25", period: "per user / year", subline: "$2.08/mo per user", detail: "Up to 50 users. Priority support.", cta: "Start team plan", featured: true },
+  { name: "Enterprise", price: "Custom", period: "", detail: "SSO, SCIM, audit export, self-hosted.", cta: "Talk to us", featured: false },
 ];
 
 function LinkButton({
@@ -223,28 +197,6 @@ function DownloadButton({ href, label }: { href: string; label: string }) {
   );
 }
 
-function SectionIntro({
-  eyebrow,
-  title,
-  description,
-}: {
-  eyebrow?: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="max-w-2xl">
-      {eyebrow ? (
-        <div className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
-          {eyebrow}
-        </div>
-      ) : null}
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{title}</h2>
-      <p className="mt-4 text-sm leading-7 text-muted-foreground">{description}</p>
-    </div>
-  );
-}
-
 function ProofPanel({
   title,
   description,
@@ -268,26 +220,21 @@ function ProofPanel({
 export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* ── Header ── */}
       <header className="border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 min-w-14 items-center justify-center rounded-xl bg-primary px-3 text-xs font-semibold tracking-[0.16em] text-primary-foreground shadow-sm">
               LFC
             </div>
-            <div>
-              <div className="text-sm font-medium text-foreground">
-                Artifact rollout for AI tooling
-              </div>
-              <div className="text-xs text-muted-foreground">Local AI config rollout for teams</div>
+            <div className="text-sm font-medium text-foreground">
+              AI tool config for teams
             </div>
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
             <a href="#how-it-works" className={buttonVariants({ variant: "ghost", size: "sm" })}>
               How it works
-            </a>
-            <a href="#safety" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              Safety
             </a>
             <a href="#pricing" className={buttonVariants({ variant: "ghost", size: "sm" })}>
               Pricing
@@ -306,228 +253,150 @@ export default function Landing() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-14 md:px-6 md:py-18">
-        <section className="grid gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:items-start">
-          <div className="max-w-3xl">
-            <StatusBadge tone="info">AI tool config management</StatusBadge>
-            <h1 className="mt-5 text-4xl font-semibold tracking-tight text-foreground md:text-6xl md:leading-[1.02]">
-              Stop sharing config files in Slack.
-            </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
-              LFC manages MCP servers, instructions, shared skills, and rules across your team&apos;s AI
-              tools. One dashboard. Shared registry plus per-tool bindings. Secrets stay secret.
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              <LinkButton to="/register">Start free</LinkButton>
-              <a href="#how-it-works" className={buttonVariants({ variant: "outline" })}>
-                See how it works
-              </a>
-            </div>
-
-            <div className="mt-10 grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">One dashboard</div>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Approve releases, assign profiles, and keep secrets out of ad hoc setup docs.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">Every tool</div>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Claude Code, Cursor, Codex, Claude Desktop, Windsurf, and OpenCode all get the bindings they expect.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">Secrets stay secret</div>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  Managed launches resolve credentials at install time without pasting tokens onto laptops by hand.
-                </p>
-              </div>
-            </div>
+        {/* ── Hero ── */}
+        <section className="max-w-3xl">
+          <h1 className="text-4xl font-semibold tracking-tight text-foreground md:text-6xl md:leading-[1.02]">
+            Same AI tools. Same config. Every machine.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg text-muted-foreground">
+            Define your team&apos;s MCP servers, skills, instructions, and rules once. LFC keeps everyone&apos;s tools in sync.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <LinkButton to="/register">Start free</LinkButton>
+            <a href="#how-it-works" className={buttonVariants({ variant: "outline" })}>
+              How it works
+            </a>
           </div>
-
-          <ProofPanel
-            title="From discovery to rollout"
-            description="The control loop stays explicit: submit, review, assign, apply, verify."
-          >
-            <div className="space-y-3">
-              <div className="rounded-xl border bg-background p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">github-mcp</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      npm package · pinned release · Claude Code, Cursor, Codex
-                    </div>
-                  </div>
-                  <StatusBadge tone="success">Managed</StatusBadge>
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-background p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">frontend-design</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      shared skill registry · Claude Code, Cursor, Codex, Windsurf, OpenCode
-                    </div>
-                  </div>
-                  <StatusBadge tone="success">Managed</StatusBadge>
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-background p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">jira-relay</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      Local plugin import · compatible with Cursor only
-                    </div>
-                  </div>
-                  <StatusBadge tone="warning">Best effort</StatusBadge>
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-background p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">legacy-notes</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                      Path-based import from one developer machine
-                    </div>
-                  </div>
-                  <StatusBadge tone="danger">Unreliable</StatusBadge>
-                </div>
-              </div>
-            </div>
-
-            <Separator className="my-5" />
-
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-foreground">
-                Fleet reads like operations, not guesswork
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border bg-background p-4">
-                  <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Profile
-                  </div>
-                  <div className="mt-2 text-base font-medium text-foreground">Backend team</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    6 approved artifacts · Claude Code and Codex only
-                  </div>
-                </div>
-                <div className="rounded-xl border bg-background p-4">
-                  <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Machine
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="text-base font-medium text-foreground">MacBookPro</div>
-                    <StatusBadge tone="success">Healthy</StatusBadge>
-                  </div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    4 registrations collapsed · last verification passed
-                  </div>
-                </div>
-              </div>
-            </div>
-          </ProofPanel>
         </section>
 
-        <section className="mt-16 border-y py-12">
-          <div className="grid gap-8 md:grid-cols-3">
+        {/* ── Tool strip ── */}
+        <section className="mt-14 border-y py-5">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+            <span className="text-xs text-muted-foreground">Works with</span>
+            {supportedTools.map((tool) => (
+              <ToolLogo key={tool.name} name={tool.name}>
+                {tool.icon}
+              </ToolLogo>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Before / After ── */}
+        <section className="mt-14 grid gap-4 lg:grid-cols-2">
+          <Card className="py-0 shadow-sm">
+            <CardHeader className="border-b bg-muted/25 py-3">
+              <CardTitle className="text-sm text-muted-foreground">Without LFC</CardTitle>
+            </CardHeader>
+            <CardContent className="py-4">
+              <ul className="space-y-2.5">
+                {beforeAfter.before.map((item) => (
+                  <li key={item} className="flex gap-2.5 text-sm text-muted-foreground">
+                    <span className="shrink-0 text-red-400">✕</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+          <Card className="border-primary/40 py-0 shadow-sm">
+            <CardHeader className="border-b bg-muted/25 py-3">
+              <CardTitle className="text-sm">With LFC</CardTitle>
+            </CardHeader>
+            <CardContent className="py-4">
+              <ul className="space-y-2.5">
+                {beforeAfter.after.map((item) => (
+                  <li key={item} className="flex gap-2.5 text-sm text-foreground">
+                    <span className="shrink-0 text-emerald-500">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* ── How it works ── */}
+        <section id="how-it-works" className="mt-20">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">How it works</h2>
+          <div className="mt-8 grid gap-8 md:grid-cols-3">
             {setupSteps.map((item) => (
-              <div key={item.step} className="text-center">
-                <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+              <div key={item.step}>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
                   {item.step}
                 </div>
-                <div className="mt-4 text-base font-medium text-foreground">{item.title}</div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.detail}</p>
-                <div className="mt-3 text-xs font-medium text-muted-foreground">{item.meta}</div>
+                <div className="mt-3 text-sm font-medium text-foreground">{item.title}</div>
+                <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <section id="how-it-works" className="mt-20 grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
-          <SectionIntro
-            eyebrow="How it works"
-            title="Write once, deploy everywhere."
-            description="Define your MCP servers, coding instructions, shared skills, and rules once in the dashboard. LFC installs shared skills once into the registry, links them into compatible tools, and writes tool-specific config in the format each tool expects."
-          />
+        {/* ── What it manages ── */}
+        <section className="mt-20 grid gap-4 md:grid-cols-2">
+          <ProofPanel title="You define">
+            <div className="space-y-3">
+              {adminDefines.map((item) => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <StatusBadge tone={item.tone}>{item.label}</StatusBadge>
+                  <span className="text-sm text-foreground">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </ProofPanel>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <ProofPanel title="Admin defines">
-              <div className="space-y-4">
-                {adminDefines.map((item) => (
-                  <div key={item.label}>
-                    <StatusBadge tone={item.tone}>{item.label}</StatusBadge>
-                    <div className="mt-2 text-sm text-foreground">{item.value}</div>
+          <ProofPanel title="LFC Manages">
+            <div className="space-y-3">
+              {fileMap.map((item) => (
+                <div key={item.tool}>
+                  <div className="text-sm font-medium text-foreground">{item.tool}</div>
+                  <div className="mt-1 space-y-0.5">
+                    {item.files.map((file) => (
+                      <div key={file} className="font-mono text-xs text-muted-foreground">{file}</div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </ProofPanel>
-
-            <ProofPanel title="LFC writes to">
-              <div className="space-y-4">
-                {fileMap.map((item) => (
-                  <div key={item.tool}>
-                    <div className="text-sm font-medium text-foreground">{item.tool}</div>
-                    <div className="mt-2 space-y-1">
-                      {item.files.map((file) => (
-                        <div key={file} className="font-mono text-xs text-muted-foreground">
-                          {file}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ProofPanel>
-          </div>
+                </div>
+              ))}
+            </div>
+          </ProofPanel>
         </section>
 
-        <section id="safety" className="mt-20 grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
-          <SectionIntro
-            eyebrow="Safety"
-            title="Your configs are never deleted."
-            description="LFC only touches entries it manages. User-owned MCP servers, personal skills, and local rules are preserved on every sync, and every write is backed up first."
-          />
+        {/* ── Safety ── */}
+        <section className="mt-20 grid gap-4 lg:grid-cols-[0.6fr_1fr] lg:items-start">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Your configs are safe.</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Only <code className="font-mono text-foreground">_managed_by: &quot;lfc&quot;</code> entries are touched. Everything else is preserved.
+            </p>
+          </div>
 
-          <ProofPanel title="~/.claude.json → mcpServers">
+          <ProofPanel title="~/.claude.json mcpServers">
             <div className="divide-y">
               {managedEntries.map((entry) => (
-                <div key={entry.name} className="flex items-center justify-between gap-4 py-3">
+                <div key={entry.name} className="flex items-center justify-between gap-4 py-2.5">
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-foreground">{entry.name}</div>
-                    <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                      {entry.command}
-                    </div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">{entry.command}</div>
                   </div>
                   <StatusBadge tone={entry.tone}>{entry.label}</StatusBadge>
                 </div>
               ))}
             </div>
-            <div className="mt-4 border-t pt-4 text-xs text-muted-foreground">
-              Only entries with <code className="font-mono text-foreground">_managed_by: "lfc"</code> are ever modified.
-            </div>
           </ProofPanel>
         </section>
 
-        <section className="mt-20 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <ProofPanel
-            title="See what your team has"
-            description="When users connect, LFC scans their tools and uploads an inventory. Admins can see shared registry content, tool-local config, and what is actually in use before promoting it into a managed release."
-          >
+        {/* ── Visibility + Review ── */}
+        <section className="mt-20 grid gap-4 lg:grid-cols-2">
+          <ProofPanel title="Team inventory">
             <div className="space-y-2">
               <div className="grid grid-cols-[auto_1fr_auto] gap-3 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 <div>Type</div>
                 <div>Name</div>
-                <div className="text-right">Members</div>
+                <div className="text-right">Users</div>
               </div>
               {inventory.map((item) => (
                 <div
                   key={`${item.type}-${item.name}`}
-                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border bg-background px-3 py-3"
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border bg-background px-3 py-2.5"
                 >
                   <StatusBadge tone={item.tone}>{item.type}</StatusBadge>
                   <div className="text-sm text-foreground">{item.name}</div>
@@ -537,44 +406,36 @@ export default function Landing() {
             </div>
           </ProofPanel>
 
-          <ProofPanel
-            title="Config flows both ways"
-            description="Users discover useful MCPs and shared skills on their own. They suggest them back to the org, and approved releases can fan out across every compatible tool automatically."
-          >
-            <div className="space-y-3">
-              {reviewFlow.map((item, index) => (
+          <ProofPanel title="Bottom-up suggestions">
+            <div className="space-y-2.5">
+              {reviewFlow.map((item) => (
                 <div key={item.step} className="flex gap-3">
                   <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
                     {item.step}
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-foreground">{item.title}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">{item.detail}</div>
+                    <span className="text-sm font-medium text-foreground">{item.title}</span>
+                    <span className="ml-2 text-sm text-muted-foreground">{item.detail}</span>
                   </div>
-                  {index < reviewFlow.length - 1 ? (
-                    <div className="ml-auto pt-1 text-xs text-muted-foreground">→</div>
-                  ) : null}
                 </div>
               ))}
             </div>
           </ProofPanel>
         </section>
 
-        <section className="mt-20 grid gap-4 lg:grid-cols-[1fr_1fr]">
-          <ProofPanel
-            title="Full audit trail"
-            description="Every config change, sync event, secret rotation, and suggestion is logged with who, what, and when."
-          >
+        {/* ── Audit + Detection ── */}
+        <section className="mt-20 grid gap-4 lg:grid-cols-2">
+          <ProofPanel title="Audit trail">
             <div className="space-y-2">
               {auditEvents.map((event) => (
                 <div
                   key={`${event.action}-${event.user}-${event.time}`}
-                  className="grid grid-cols-[8.5rem_minmax(0,1fr)_2rem] items-center gap-3 rounded-lg border bg-background px-3 py-3"
+                  className="grid grid-cols-[8.5rem_minmax(0,1fr)_2rem] items-center gap-3 rounded-lg border bg-background px-3 py-2.5"
                 >
                   <div className="justify-self-start">
                     <StatusBadge tone={event.tone}>{event.action}</StatusBadge>
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0">
                     <div className="text-sm text-foreground">{event.user}</div>
                     <div className="truncate text-sm text-muted-foreground">{event.detail}</div>
                   </div>
@@ -584,15 +445,12 @@ export default function Landing() {
             </div>
           </ProofPanel>
 
-          <ProofPanel
-            title="Auto-detects everything"
-            description="The tray app scans the machine, finds supported AI tools, separates shared registry content from tool-local config, and previews what is configured before writing a single byte."
-          >
+          <ProofPanel title="Auto-detection">
             <div className="space-y-2">
               {detectedTools.map((tool) => (
                 <div
                   key={tool.name}
-                  className="flex items-center justify-between gap-4 rounded-lg border bg-background px-3 py-3"
+                  className="flex items-center justify-between gap-4 rounded-lg border bg-background px-3 py-2.5"
                 >
                   <div className="flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -605,80 +463,59 @@ export default function Landing() {
           </ProofPanel>
         </section>
 
+        {/* ── Pricing ── */}
         <section id="pricing" className="mt-20">
-          <SectionIntro
-            eyebrow="Pricing"
-            title="Free for small teams. Pay when you grow."
-            description="All prices are annual, not monthly. Start with the full product on a small team, then move up when you need more seats or enterprise controls."
-          />
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">Pricing</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Free up to 5 users. Annual billing.</p>
 
-          <div className="mt-8 grid gap-4 lg:grid-cols-3">
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
             {plans.map((plan) => (
               <Card
                 key={plan.name}
-                className={plan.featured ? "border-primary/70 bg-card py-0 shadow-sm" : "py-0 shadow-sm"}
+                className={plan.featured ? "flex border-primary/70 bg-card py-0 shadow-sm" : "flex py-0 shadow-sm"}
               >
-                <CardContent className="space-y-4 py-6">
+                <CardContent className="flex flex-1 flex-col py-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-foreground">{plan.name}</div>
                     {plan.featured ? <StatusBadge tone="warning">Most teams</StatusBadge> : null}
                   </div>
-
-                  <div>
+                  <div className="mt-3">
                     <div className="flex items-baseline gap-2">
-                      <div className="text-4xl font-semibold tracking-tight text-foreground">
-                        {plan.price}
-                      </div>
-                      {plan.period ? (
-                        <div className="text-sm text-muted-foreground">{plan.period}</div>
-                      ) : null}
+                      <div className="text-3xl font-semibold tracking-tight text-foreground">{plan.price}</div>
+                      {plan.period ? <div className="text-sm text-muted-foreground">{plan.period}</div> : null}
                     </div>
-                    {plan.subline ? (
-                      <div className="mt-2 text-sm text-muted-foreground">{plan.subline}</div>
-                    ) : null}
+                    <div className="mt-1 text-xs text-muted-foreground">{plan.subline ?? "\u00A0"}</div>
                   </div>
-
-                  <p className="text-sm leading-6 text-muted-foreground">{plan.detail}</p>
-
-                  <Link
-                    to="/register"
-                    className={buttonVariants({
-                      variant: plan.featured ? "default" : "outline",
-                    })}
-                  >
-                    {plan.cta}
-                  </Link>
+                  <p className="mt-3 text-sm text-muted-foreground">{plan.detail}</p>
+                  <div className="mt-auto pt-4">
+                    <Link
+                      to="/register"
+                      className={buttonVariants({ variant: plan.featured ? "default" : "outline", className: "w-full" })}
+                    >
+                      {plan.cta}
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         </section>
 
+        {/* ── Download ── */}
         <section id="download" className="mt-20">
           <Card className="py-0 shadow-sm">
             <CardContent className="flex flex-col gap-6 py-8 lg:flex-row lg:items-center lg:justify-between">
-              <div className="max-w-2xl">
-                <div className="text-sm font-medium tracking-wide text-muted-foreground uppercase">
-                  Download
-                </div>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
-                  Install the client, register the machine, and let Fleet tell the truth.
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                  Ready in under 5 minutes.
                 </h2>
-                <p className="mt-3 text-sm leading-7 text-muted-foreground">
-                  The client scans compatible tools, syncs assignments, writes managed bindings,
-                  verifies the result, and reports health back to the dashboard.
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Create a workspace, install the client, done.
                 </p>
               </div>
-
               <div className="flex flex-wrap gap-3">
-                <DownloadButton
-                  href={`${GITHUB_DOWNLOAD}/LFC_aarch64.dmg`}
-                  label="macOS (Apple Silicon)"
-                />
-                <DownloadButton
-                  href={`${GITHUB_DOWNLOAD}/LFC_x64.dmg`}
-                  label="macOS (Intel)"
-                />
+                <DownloadButton href={`${GITHUB_DOWNLOAD}/LFC_aarch64.dmg`} label="macOS (Apple Silicon)" />
+                <DownloadButton href={`${GITHUB_DOWNLOAD}/LFC_x64.dmg`} label="macOS (Intel)" />
                 <DownloadButton href={`${GITHUB_DOWNLOAD}/LFC_x64.msi`} label="Windows" />
               </div>
             </CardContent>
@@ -688,17 +525,11 @@ export default function Landing() {
 
       <footer className="border-t">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between md:px-6">
-          <div>LFC — Looking For Config</div>
+          <div>LFC</div>
           <div className="flex items-center gap-4">
-            <a href="#pricing" className="hover:text-foreground">
-              Pricing
-            </a>
-            <Link to="/login" className="hover:text-foreground">
-              Sign in
-            </Link>
-            <Link to="/register" className="hover:text-foreground">
-              Get started
-            </Link>
+            <a href="#pricing" className="hover:text-foreground">Pricing</a>
+            <Link to="/login" className="hover:text-foreground">Sign in</Link>
+            <Link to="/register" className="hover:text-foreground">Get started</Link>
           </div>
         </div>
       </footer>
