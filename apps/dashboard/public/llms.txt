@@ -1,0 +1,63 @@
+LFC (Looking For Config)
+Canonical URL: https://lfc.dev/
+
+Summary
+LFC is a service for teams that need consistent AI tool configuration across many machines. Admins define MCP servers, shared skills, instructions, rules, and secrets once; LFC syncs the managed parts into supported tools without overwriting personal config.
+
+What LFC does
+- Manages the files AI tools already read from disk.
+- Syncs approved MCP servers, skills, instructions, rules, and secrets to developer machines.
+- Preserves personal config and only updates entries managed by LFC.
+- Gives teams a dashboard for profiles, rollout, audit history, and fleet visibility.
+- Supports bottom-up suggestions: developers can submit useful local tools or skills for admin review.
+
+Who it is for
+- Engineering teams standardizing AI coding and desktop tools.
+- Admins who want one source of truth for AI tool setup.
+- Developers who need fast onboarding and consistent local environments.
+
+Supported tools mentioned on the public site
+- Claude Code
+- Cursor
+- Claude Desktop
+- Codex
+- Windsurf
+- OpenCode
+
+Managed artifact types
+- MCP servers
+- Shared skills
+- Instructions
+- Rules
+- Secrets
+
+Core workflow
+1. Define profiles with the MCPs, skills, instructions, rules, and secrets your team should use.
+2. Install the LFC client, which detects supported tools on the machine.
+3. Sync approved configuration to those tools while leaving personal entries untouched.
+
+Safety model
+- LFC only touches entries marked as managed by LFC.
+- Personal configs outside the managed scope are preserved.
+- Secrets resolve at install or write time rather than being pasted into shared docs.
+
+Public pages
+- https://lfc.dev/ : marketing overview and pricing
+- https://lfc.dev/register : sign-up
+- https://lfc.dev/login : sign-in
+- https://lfc.dev/privacy : privacy policy
+- https://lfc.dev/terms : terms of service
+- https://lfc.dev/acceptable-use : acceptable use policy
+
+Key product messages from the site
+- "Same AI tools. Same config. Every machine."
+- "Define your team's MCP servers, skills, instructions, and rules once."
+- "Your configs are safe."
+
+Operator
+LFC.DEV is operated by Abrega, Inc.
+
+Contact
+- privacy@lfc.dev
+- legal@lfc.dev
+- abuse@lfc.dev
