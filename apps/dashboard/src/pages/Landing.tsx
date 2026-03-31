@@ -19,14 +19,14 @@ const setupSteps = [
     step: "1",
     title: "Create the workspace",
     detail:
-      "Set up the org, define approved MCPs, instructions, rules, and shared secrets in one place.",
+      "Set up the org, define approved MCPs, shared skills, instructions, rules, and secrets in one place.",
     meta: "Takes about 2 minutes",
   },
   {
     step: "2",
     title: "Install the client",
     detail:
-      "Each teammate installs the tray app once. LFC detects their tools and binds into the local files those tools already read.",
+      "Each teammate installs the tray app once. LFC detects compatible tools, shared registry content, and the local files those tools already read.",
     meta: "macOS and Windows",
   },
   {
@@ -40,6 +40,11 @@ const setupSteps = [
 
 const adminDefines = [
   { label: "MCP", tone: "success" as const, value: "github, postgres, sentry, jira" },
+  {
+    label: "Shared skills",
+    tone: "warning" as const,
+    value: "frontend-design, teach-impeccable, code-review",
+  },
   { label: "Instructions", tone: "info" as const, value: "Acme coding standards" },
   { label: "Rules", tone: "neutral" as const, value: "TypeScript strict, named exports" },
   { label: "Secrets", tone: "warning" as const, value: "GITHUB_TOKEN, SENTRY_DSN" },
@@ -47,18 +52,27 @@ const adminDefines = [
 
 const fileMap = [
   {
+    tool: "Shared registry",
+    files: ["~/.agents/skills/"],
+  },
+  {
     tool: "Claude Code",
     files: [
       "~/.claude.json",
       "~/.claude/CLAUDE.md",
+      "~/.claude/skills/ → linked shared skills",
       "~/.claude/rules/",
-      "~/.claude/skills/",
       "~/.claude/agents/",
     ],
   },
   {
     tool: "Cursor",
-    files: ["~/.cursor/mcp.json", ".cursorrules", ".cursor/rules/"],
+    files: [
+      "~/.cursor/mcp.json",
+      ".cursorrules",
+      ".cursor/rules/",
+      "~/.cursor/skills/ → linked shared skills",
+    ],
   },
   {
     tool: "Claude Desktop",
@@ -66,11 +80,18 @@ const fileMap = [
   },
   {
     tool: "Codex",
-    files: ["~/AGENTS.md", "~/.codex/mcp.json"],
+    files: ["~/AGENTS.md", "~/.codex/mcp.json", "~/.codex/skills/ → linked shared skills"],
   },
   {
     tool: "Windsurf",
-    files: ["~/.codeium/windsurf/mcp_config.json"],
+    files: [
+      "~/.codeium/windsurf/mcp_config.json",
+      "~/.codeium/windsurf/skills/ → linked shared skills",
+    ],
+  },
+  {
+    tool: "OpenCode",
+    files: ["~/.opencode/skills/ → linked shared skills"],
   },
 ];
 
@@ -109,15 +130,23 @@ const managedEntries = [
 
 const inventory = [
   { type: "MCP", name: "github", users: 12, tone: "success" as const },
-  { type: "MCP", name: "postgres", users: 8, tone: "success" as const },
-  { type: "Skill", name: "frontend-design", users: 6, tone: "warning" as const },
-  { type: "Skill", name: "code-review", users: 5, tone: "warning" as const },
+  { type: "Shared", name: "frontend-design", users: 6, tone: "warning" as const },
+  { type: "Shared", name: "teach-impeccable", users: 4, tone: "warning" as const },
+  { type: "Project", name: "AGENTS.md defaults", users: 7, tone: "info" as const },
   { type: "Rule", name: "coding-standards", users: 12, tone: "neutral" as const },
 ];
 
 const reviewFlow = [
-  { step: "1", title: "Discover", detail: "A developer finds a useful MCP or skill locally." },
-  { step: "2", title: "Suggest", detail: "They submit it back to the org through the client." },
+  {
+    step: "1",
+    title: "Discover",
+    detail: "A developer finds a useful MCP, project instruction, or shared skill locally.",
+  },
+  {
+    step: "2",
+    title: "Suggest",
+    detail: "They submit that shared registry item or tool-local config back to the org.",
+  },
   { step: "3", title: "Review", detail: "An admin approves it and assigns it to profiles." },
   { step: "4", title: "Deploy", detail: "The release rolls out automatically to matching machines." },
 ];
@@ -131,11 +160,13 @@ const auditEvents = [
 ];
 
 const detectedTools = [
-  { name: "Claude Code", detail: "5 MCPs, 12 skills, 3 rules, 2 agents" },
-  { name: "Cursor", detail: "5 MCPs, 2 rules" },
-  { name: "Claude Desktop", detail: "5 MCPs" },
-  { name: "Codex", detail: "3 MCPs, instructions" },
-  { name: "Windsurf", detail: "2 MCPs" },
+  { name: "Shared registry", detail: "28 shared skills installed once and linked into compatible tools" },
+  { name: "Claude Code", detail: "4 MCPs, instructions, 29 linked shared skills, 2 agents" },
+  { name: "Cursor", detail: "1 MCP, 28 linked shared skills" },
+  { name: "Claude Desktop", detail: "3 MCPs" },
+  { name: "Codex", detail: "instructions, 28 linked shared skills" },
+  { name: "Windsurf", detail: "28 linked shared skills" },
+  { name: "OpenCode", detail: "28 linked shared skills" },
 ];
 
 const plans = [
@@ -282,8 +313,8 @@ export default function Landing() {
               Stop sharing config files in Slack.
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
-              LFC manages MCP servers, instructions, skills, and rules across your team&apos;s AI
-              tools. One dashboard. Every tool. Secrets stay secret.
+              LFC manages MCP servers, instructions, shared skills, and rules across your team&apos;s AI
+              tools. One dashboard. Shared registry plus per-tool bindings. Secrets stay secret.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -303,7 +334,7 @@ export default function Landing() {
               <div className="space-y-2">
                 <div className="text-sm font-medium text-foreground">Every tool</div>
                 <p className="text-sm leading-6 text-muted-foreground">
-                  Claude Code, Cursor, Codex, Claude Desktop, and Windsurf all get the files they expect.
+                  Claude Code, Cursor, Codex, Claude Desktop, Windsurf, and OpenCode all get the bindings they expect.
                 </p>
               </div>
               <div className="space-y-2">
@@ -326,6 +357,18 @@ export default function Landing() {
                     <div className="text-sm font-medium text-foreground">github-mcp</div>
                     <div className="mt-1 text-sm text-muted-foreground">
                       npm package · pinned release · Claude Code, Cursor, Codex
+                    </div>
+                  </div>
+                  <StatusBadge tone="success">Managed</StatusBadge>
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-background p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">frontend-design</div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      shared skill registry · Claude Code, Cursor, Codex, Windsurf, OpenCode
                     </div>
                   </div>
                   <StatusBadge tone="success">Managed</StatusBadge>
@@ -409,7 +452,7 @@ export default function Landing() {
           <SectionIntro
             eyebrow="How it works"
             title="Write once, deploy everywhere."
-            description="Define your MCP servers, coding instructions, and rules once in the dashboard. LFC writes them to the correct file, in the correct format, for every supported tool on every team member’s machine."
+            description="Define your MCP servers, coding instructions, shared skills, and rules once in the dashboard. LFC installs shared skills once into the registry, links them into compatible tools, and writes tool-specific config in the format each tool expects."
           />
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -473,7 +516,7 @@ export default function Landing() {
         <section className="mt-20 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <ProofPanel
             title="See what your team has"
-            description="When users connect, LFC scans their tools and uploads an inventory. Admins can see what is actually in use before promoting it into a managed release."
+            description="When users connect, LFC scans their tools and uploads an inventory. Admins can see shared registry content, tool-local config, and what is actually in use before promoting it into a managed release."
           >
             <div className="space-y-2">
               <div className="grid grid-cols-[auto_1fr_auto] gap-3 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -496,7 +539,7 @@ export default function Landing() {
 
           <ProofPanel
             title="Config flows both ways"
-            description="Users discover useful MCPs and skills on their own. They suggest them back to the org, and approved releases roll out automatically."
+            description="Users discover useful MCPs and shared skills on their own. They suggest them back to the org, and approved releases can fan out across every compatible tool automatically."
           >
             <div className="space-y-3">
               {reviewFlow.map((item, index) => (
@@ -543,7 +586,7 @@ export default function Landing() {
 
           <ProofPanel
             title="Auto-detects everything"
-            description="The tray app scans the machine, finds supported AI tools, and previews what is configured before writing a single byte."
+            description="The tray app scans the machine, finds supported AI tools, separates shared registry content from tool-local config, and previews what is configured before writing a single byte."
           >
             <div className="space-y-2">
               {detectedTools.map((tool) => (
