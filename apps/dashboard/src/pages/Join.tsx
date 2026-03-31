@@ -80,26 +80,6 @@ export default function Join() {
 
   return (
     <AuthShell
-      eyebrow="Team invite"
-      title={`Join ${invite?.invite?.orgName || "organization"}`}
-      description="This link will attach your account to the organization and bring you straight into the rollout dashboard."
-      highlights={[
-        {
-          label: "Profiles",
-          title: "Assignments stay team-scoped",
-          detail: "You inherit the org and can be targeted through profiles instead of local setup docs.",
-        },
-        {
-          label: "Fleet",
-          title: "Your devices report health back",
-          detail: "Tray and CLI clients show verification state once they register.",
-        },
-        {
-          label: "Security",
-          title: "Secrets stay managed",
-          detail: "Shared launches resolve org secrets without distributing raw credentials by hand.",
-        },
-      ]}
       footer={
         !user ? (
           <span>
@@ -114,15 +94,22 @@ export default function Join() {
       }
     >
       <Card className="py-0">
-        <CardContent className="space-y-4 py-6 md:py-7">
+        <CardContent className="py-6">
+          <h1 className="text-lg font-semibold text-foreground">
+            Join {invite?.invite?.orgName || "organization"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            You&apos;ve been invited to join this team.
+          </p>
+
           {error ? (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="mt-4">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
 
           {user ? (
-            <div className="space-y-4">
+            <div className="mt-5 space-y-4">
               <p className="text-sm text-muted-foreground">
                 Signed in as <strong>{user.email}</strong>.
               </p>
@@ -131,14 +118,14 @@ export default function Join() {
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleRegisterAndJoin} className="space-y-4">
+            <form onSubmit={handleRegisterAndJoin} className="mt-5 space-y-4">
               <div>
                 <Label htmlFor="join-name">Name</Label>
                 <Input
                   id="join-name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  className="mt-2"
+                  className="mt-1.5"
                   required
                 />
               </div>
@@ -149,7 +136,7 @@ export default function Join() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="mt-2"
+                  className="mt-1.5"
                   required
                 />
               </div>
@@ -160,7 +147,7 @@ export default function Join() {
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="mt-2"
+                  className="mt-1.5"
                   required
                 />
               </div>

@@ -224,7 +224,7 @@ export default function Landing() {
       <header className="border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 min-w-14 items-center justify-center rounded-xl bg-primary px-3 text-xs font-semibold tracking-[0.16em] text-primary-foreground shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-semibold tracking-[0.12em] text-primary-foreground shadow-sm">
               LFC
             </div>
             <div className="text-sm font-medium text-foreground">
@@ -345,7 +345,7 @@ export default function Landing() {
           </ProofPanel>
 
           <ProofPanel title="LFC Manages">
-            <div className="space-y-3">
+            <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
               {fileMap.map((item) => (
                 <div key={item.tool}>
                   <div className="text-sm font-medium text-foreground">{item.tool}</div>
@@ -528,6 +528,8 @@ export default function Landing() {
           <div>LFC</div>
           <div className="flex items-center gap-4">
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
+            <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+            <Link to="/terms" className="hover:text-foreground">Terms</Link>
             <Link to="/login" className="hover:text-foreground">Sign in</Link>
             <Link to="/register" className="hover:text-foreground">Get started</Link>
           </div>

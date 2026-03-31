@@ -13,6 +13,9 @@ import Team from "./pages/Team";
 import Join from "./pages/Join";
 import Settings from "./pages/Settings";
 import Landing from "./pages/Landing";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import AcceptableUse from "./pages/AcceptableUse";
 
 export default function App() {
   return (
@@ -22,6 +25,9 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/join/:code" element={<Join />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/acceptable-use" element={<AcceptableUse />} />
         <Route
           path="/app/*"
           element={
