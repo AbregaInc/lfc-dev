@@ -4,14 +4,19 @@ export default function AcceptableUse() {
   return (
     <LegalShell title="Acceptable Use Policy" updated="March 30, 2026">
       <section>
+        <h2>Operator</h2>
+        <p>LFC.DEV is operated by Abrega, Inc. This policy applies to all use of the Service by admins, members, and invited users.</p>
+      </section>
+
+      <section>
         <h2>Purpose</h2>
-        <p>This policy defines what is and isn&apos;t allowed when using LFC. It applies to all users, including admins and members.</p>
+        <p>This policy defines what is and isn&apos;t allowed when using LFC.DEV.</p>
       </section>
 
       <section>
         <h2>You may</h2>
         <ul>
-          <li>Use LFC to manage AI tool configurations for your team.</li>
+          <li>Use LFC.DEV to manage AI tool configurations for your team.</li>
           <li>Store MCP server definitions, instructions, rules, shared skills, and API credentials in the dashboard.</li>
           <li>Use the tray client to sync approved configurations to your devices.</li>
           <li>Submit suggestions for new artifacts to your organization&apos;s admins.</li>

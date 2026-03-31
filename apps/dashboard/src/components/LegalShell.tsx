@@ -33,10 +33,13 @@ export default function LegalShell({
       </main>
 
       <footer className="border-t">
-        <div className="mx-auto flex max-w-3xl flex-wrap gap-4 px-4 py-6 text-sm text-muted-foreground md:px-6">
-          <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
-          <Link to="/terms" className="hover:text-foreground">Terms</Link>
-          <Link to="/acceptable-use" className="hover:text-foreground">Acceptable Use</Link>
+        <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground md:px-6">
+          <div>LFC.DEV is operated by Abrega, Inc.</div>
+          <div className="flex flex-wrap gap-4">
+            <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+            <Link to="/terms" className="hover:text-foreground">Terms</Link>
+            <Link to="/acceptable-use" className="hover:text-foreground">Acceptable Use</Link>
+          </div>
         </div>
       </footer>
     </div>

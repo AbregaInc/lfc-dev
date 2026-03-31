@@ -525,7 +525,7 @@ export default function Landing() {
 
       <footer className="border-t">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-6 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between md:px-6">
-          <div>LFC</div>
+          <div>LFC.DEV is operated by Abrega, Inc.</div>
           <div className="flex items-center gap-4">
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
             <Link to="/privacy" className="hover:text-foreground">Privacy</Link>

@@ -4,6 +4,11 @@ export default function Privacy() {
   return (
     <LegalShell title="Privacy Policy" updated="March 30, 2026">
       <section>
+        <h2>Operator</h2>
+        <p>LFC.DEV is operated by Abrega, Inc. This policy explains how we collect, use, and protect information when you use the Service.</p>
+      </section>
+
+      <section>
         <h2>What we collect</h2>
         <ul>
           <li><strong>Account info</strong> — name, email, and hashed password when you register.</li>
@@ -18,13 +23,13 @@ export default function Privacy() {
         <ul>
           <li>We never read or store the contents of your code, prompts, or AI conversations.</li>
           <li>Secret values are encrypted at rest and resolved on-device at install time. We do not log plaintext secrets.</li>
-          <li>Personal config entries (not managed by LFC) are never uploaded.</li>
+          <li>Personal config entries (not managed by LFC.DEV) are never uploaded.</li>
         </ul>
       </section>
 
       <section>
         <h2>How we use your data</h2>
-        <p>We use collected data to operate the service, sync configurations to your devices, display fleet health in the dashboard, and improve reliability. We do not sell your data or use it for advertising.</p>
+        <p>We use collected data to operate LFC.DEV, sync configurations to your devices, display fleet health in the dashboard, and improve reliability. We do not sell your data or use it for advertising.</p>
       </section>
 
       <section>

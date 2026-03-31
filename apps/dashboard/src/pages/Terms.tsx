@@ -5,12 +5,12 @@ export default function Terms() {
     <LegalShell title="Terms of Service" updated="March 30, 2026">
       <section>
         <h2>Agreement</h2>
-        <p>By using LFC (&quot;the Service&quot;), operated by Abrega Inc. (&quot;we&quot;, &quot;us&quot;), you agree to these terms. If you don&apos;t agree, don&apos;t use the Service.</p>
+        <p>By using LFC.DEV (&quot;the Service&quot;), operated by Abrega, Inc. (&quot;we&quot;, &quot;us&quot;), you agree to these terms. If you don&apos;t agree, don&apos;t use the Service.</p>
       </section>
 
       <section>
         <h2>The Service</h2>
-        <p>LFC is a configuration management tool that syncs AI tool settings across your team&apos;s devices. We provide a dashboard for admins and a tray client for developers.</p>
+        <p>LFC.DEV is a configuration management tool that syncs AI tool settings across your team&apos;s devices. We provide a dashboard for admins and a tray client for developers.</p>
       </section>
 
       <section>
