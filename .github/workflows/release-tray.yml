@@ -110,6 +110,17 @@ jobs:
         with:
           workspaces: apps/tray/src-tauri
 
+      - name: Prepare App Store Connect API key
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.APPLE_API_PRIVATE_KEY }}" ]; then
+            KEY_PATH="$RUNNER_TEMP/AuthKey_${{ secrets.APPLE_API_KEY }}.p8"
+            printf '%s' "${{ secrets.APPLE_API_PRIVATE_KEY }}" > "$KEY_PATH"
+            chmod 600 "$KEY_PATH"
+            echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+          fi
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -117,6 +128,17 @@ jobs:
           # Tauri updater signing (v1 uses TAURI_PRIVATE_KEY)
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ''
+          # macOS code signing / notarization. Either APPLE_ID+APPLE_PASSWORD+APPLE_TEAM_ID
+          # or APPLE_API_ISSUER+APPLE_API_KEY+APPLE_API_PRIVATE_KEY must be provided.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
         with:
           projectPath: apps/tray
           tagName: ${{ needs.version.outputs.tag }}
