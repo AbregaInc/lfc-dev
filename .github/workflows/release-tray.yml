@@ -121,7 +121,7 @@ jobs:
             echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
           fi
 
-      - name: Probe macOS signing setup
+      - name: Prepare macOS signing keychain
         if: matrix.platform == 'macos-latest'
         shell: bash
         env:
@@ -133,13 +133,6 @@ jobs:
           KEYCHAIN_PASSWORD="$(openssl rand -hex 12)"
           KEYCHAIN_PATH="$RUNNER_TEMP/lfc-signing.keychain-db"
           P12_PATH="$RUNNER_TEMP/lfc-signing-cert.p12"
-          TEST_BINARY="$RUNNER_TEMP/codesign-probe"
-
-          cleanup() {
-            security delete-keychain "$KEYCHAIN_PATH" || true
-            rm -f "$P12_PATH" "$TEST_BINARY"
-          }
-          trap cleanup EXIT
 
           printf '%s' "$APPLE_CERTIFICATE" | openssl base64 -d -A -out "$P12_PATH"
 
@@ -156,6 +149,10 @@ jobs:
             -s \
             -k "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
+
+          EXISTING_KEYCHAINS="$(security list-keychains -d user | tr -d '"')"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_KEYCHAINS
+          security default-keychain -d user -s "$KEYCHAIN_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
           IDENTITY_HASH="$(
@@ -168,11 +165,8 @@ jobs:
           fi
           echo "Using signing identity hash: $IDENTITY_HASH"
           echo "APPLE_SIGNING_IDENTITY=$IDENTITY_HASH" >> "$GITHUB_ENV"
-
-          cp /bin/ls "$TEST_BINARY"
-          chmod u+w "$TEST_BINARY"
-          codesign --force --sign "$IDENTITY_HASH" --keychain "$KEYCHAIN_PATH" "$TEST_BINARY"
-          codesign --verify --verbose=4 "$TEST_BINARY"
+          echo "APPLE_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          rm -f "$P12_PATH"
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -181,11 +175,8 @@ jobs:
           # Tauri updater signing (v1 uses TAURI_PRIVATE_KEY)
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ''
-          # macOS code signing / notarization. Either APPLE_ID+APPLE_PASSWORD+APPLE_TEAM_ID
-          # or APPLE_API_ISSUER+APPLE_API_KEY+APPLE_API_PRIVATE_KEY must be provided.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # macOS notarization. Signing identity comes from the prepared keychain above.
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -206,3 +197,11 @@ jobs:
           includeUpdaterJson: true
           assetNamePattern: '[name]_[arch][ext]'
           args: --target ${{ matrix.target }}
+
+      - name: Cleanup macOS signing keychain
+        if: always() && matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          if [ -n "${APPLE_KEYCHAIN_PATH:-}" ]; then
+            security delete-keychain "$APPLE_KEYCHAIN_PATH" || true
+          fi
