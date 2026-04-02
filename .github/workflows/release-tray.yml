@@ -127,7 +127,6 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           set -euxo pipefail
 
@@ -159,9 +158,20 @@ jobs:
             "$KEYCHAIN_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
+          IDENTITY_HASH="$(
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+              | awk '/Developer ID Application:/ { print $2; exit }'
+          )"
+          if [ -z "$IDENTITY_HASH" ]; then
+            echo "Developer ID Application identity not found in imported certificate" >&2
+            exit 1
+          fi
+          echo "Using signing identity hash: $IDENTITY_HASH"
+          echo "APPLE_SIGNING_IDENTITY=$IDENTITY_HASH" >> "$GITHUB_ENV"
+
           cp /bin/ls "$TEST_BINARY"
           chmod u+w "$TEST_BINARY"
-          codesign --force --sign "$APPLE_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" "$TEST_BINARY"
+          codesign --force --sign "$IDENTITY_HASH" --keychain "$KEYCHAIN_PATH" "$TEST_BINARY"
           codesign --verify --verbose=4 "$TEST_BINARY"
 
       - name: Build Tauri app
