@@ -112,6 +112,9 @@ importers:
 
   apps/tray:
     dependencies:
+      '@fontsource-variable/geist':
+        specifier: ^5.2.8
+        version: 5.2.8
       '@tauri-apps/plugin-updater':
         specifier: ~2.10.1
         version: 2.10.1
