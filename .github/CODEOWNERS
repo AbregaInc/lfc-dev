@@ -1,0 +1,5 @@
+* @bberenberg
+
+.github/workflows/ @bberenberg
+apps/api/src/routes/ @bberenberg
+apps/tray/src-tauri/ @bberenberg
