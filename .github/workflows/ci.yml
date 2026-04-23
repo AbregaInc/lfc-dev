@@ -63,4 +63,7 @@ jobs:
         with:
           workspaces: apps/tray/src-tauri
 
+      - name: Prepare frontend dist for context generation
+        run: mkdir -p ../dist
+
       - run: cargo check --locked
