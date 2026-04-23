@@ -34,7 +34,7 @@ jobs:
 
   tray-rust-check:
     name: Tray Rust Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/tray/src-tauri
@@ -47,13 +47,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            curl \
+            file \
             libayatana-appindicator3-dev \
-            libjavascriptcoregtk-4.0-dev \
-            libsoup2.4-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
             librsvg2-dev \
-            libwebkit2gtk-4.0-dev \
             libxdo-dev \
-            pkg-config
+            pkg-config \
+            wget
 
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
 
