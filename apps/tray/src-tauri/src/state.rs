@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -77,6 +79,8 @@ impl AppState {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         let dir = home.join(".lfc");
         fs::create_dir_all(&dir).ok();
+        #[cfg(unix)]
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).ok();
         dir.join("config.json")
     }
 
@@ -87,7 +91,6 @@ impl AppState {
             Ok(config) => Some(config),
             Err(e) => {
                 eprintln!("[LFC] Failed to parse config at {}: {}. Using defaults.", path.display(), e);
-                // Delete corrupted/incompatible config so it gets rewritten on next save
                 fs::remove_file(&path).ok();
                 None
             }
@@ -98,7 +101,10 @@ impl AppState {
         let config = self.config.lock().unwrap();
         let path = Self::config_path();
         if let Ok(json) = serde_json::to_string_pretty(&*config) {
-            fs::write(path, json).ok();
+            if fs::write(&path, json).is_ok() {
+                #[cfg(unix)]
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).ok();
+            }
         }
     }
 }
