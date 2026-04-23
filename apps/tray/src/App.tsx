@@ -2,12 +2,33 @@ import { useState, useEffect } from "react";
 import { API_URL } from "./config";
 import Login from "./pages/Login";
 import Status from "./pages/Status";
-import Onboarding, { type ToolScan } from "./pages/Onboarding";
+import Onboarding from "./pages/Onboarding";
+import type { ToolScan } from "./lib/toolScan";
 
 type Page = "login" | "status" | "onboarding";
 
-type ConfigItem = { type: "mcp"; name: string; command: string; args: string[]; managed: boolean }
-  | { type: "skill" | "rule" | "agent"; name: string; managed: boolean; preview: string };
+type ConfigItem =
+  | {
+      type: "mcp";
+      name: string;
+      command: string;
+      args: string[];
+      managed: boolean;
+      scope?: string;
+      supportedTools?: string[];
+      path?: string;
+      distributionScope?: "shared" | "tool";
+    }
+  | {
+      type: "skill" | "rule" | "agent";
+      name: string;
+      managed: boolean;
+      preview: string;
+      scope?: string;
+      supportedTools?: string[];
+      path?: string;
+      distributionScope?: "shared" | "tool";
+    };
 
 interface AppState {
   loggedIn: boolean;
@@ -28,20 +49,45 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
   return invoke<T>(cmd, args);
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
+
+async function tauriInvokeWithTimeout<T>(
+  cmd: string,
+  args: Record<string, unknown> | undefined,
+  timeoutMs: number,
+  message: string
+): Promise<T> {
+  return withTimeout(tauriInvoke<T>(cmd, args), timeoutMs, message);
+}
+
 function getStored() {
-  const storedOrgId = localStorage.getItem("lfc_tray_org_id");
   return {
     token: localStorage.getItem("lfc_tray_token"),
     email: localStorage.getItem("lfc_tray_email") || "",
     apiUrl: API_URL,
-    orgId: storedOrgId && storedOrgId !== "null" ? storedOrgId : "",
+    orgId: localStorage.getItem("lfc_tray_org_id") || "",
+    deviceId: localStorage.getItem("lfc_tray_device_id") || "",
   };
 }
 
 async function apiFetch(path: string, opts: RequestInit = {}) {
   const { token, apiUrl } = getStored();
-  const headers: Record<string, string> = { "Content-Type": "application/json", ...opts.headers as any };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(opts.headers as any) };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${apiUrl}${path}`, { ...opts, headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -62,12 +108,19 @@ export default function App() {
   const [suggestedItems, setSuggestedItems] = useState<Set<string>>(new Set());
   const [defaultProfileId, setDefaultProfileId] = useState<string | null>(null);
 
-  useEffect(() => { loadStatus(); }, []);
+  useEffect(() => {
+    loadStatus();
+  }, []);
 
   const loadStatus = async () => {
     if (isTauri) {
       try {
-        const status = await tauriInvoke<AppState>("get_status");
+        const status = await tauriInvokeWithTimeout<AppState>(
+          "get_status",
+          undefined,
+          5000,
+          "Tray status check timed out"
+        );
         setState(status);
         if (!status.loggedIn) {
           setPage("login");
@@ -81,16 +134,11 @@ export default function App() {
         console.error("[LFC] get_status failed:", e);
       }
     }
-    const { token, email, apiUrl, orgId } = getStored();
-    if (token && orgId) {
+    const { token, email, apiUrl } = getStored();
+    if (token) {
       setState((s) => ({ ...s, loggedIn: true, email, apiUrl }));
       const hasLastSync = !!localStorage.getItem("lfc_tray_last_sync");
       setPage(hasLastSync ? "status" : "onboarding");
-    } else if (token) {
-      localStorage.removeItem("lfc_tray_token");
-      localStorage.removeItem("lfc_tray_email");
-      localStorage.removeItem("lfc_tray_org_id");
-      localStorage.removeItem("lfc_tray_last_sync");
     }
   };
 
@@ -108,9 +156,35 @@ export default function App() {
     }
   };
 
+  const ensureBrowserDevice = async () => {
+    const { deviceId } = getStored();
+    const data = await apiFetch("/api/devices/register", {
+      method: "POST",
+      body: JSON.stringify({
+        deviceId: deviceId || undefined,
+        name: `browser@${window.location.hostname || "local"}`,
+        platform: navigator.platform || "browser",
+        arch: "unknown",
+        clientKind: "tray-web",
+        clientVersion: "0.1.0",
+        detectedTools: [],
+      }),
+    });
+    const resolvedDeviceId = data.device?.id as string;
+    if (resolvedDeviceId) {
+      localStorage.setItem("lfc_tray_device_id", resolvedDeviceId);
+    }
+    return resolvedDeviceId;
+  };
+
   const handleLogin = async (apiUrl: string, email: string, password: string) => {
     if (isTauri) {
-      await tauriInvoke("login", { apiUrl, email, password });
+      await tauriInvokeWithTimeout(
+        "login",
+        { apiUrl, email, password },
+        15000,
+        "Tray login timed out. Check the local API URL and try again."
+      );
       await loadStatus();
       await loadDefaultProfile();
       return;
@@ -122,12 +196,10 @@ export default function App() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Login failed");
-    if (!data.user?.orgId) {
-      throw new Error("This account is not part of an organization. Create one or join by invite in the dashboard first.");
-    }
     localStorage.setItem("lfc_tray_token", data.token);
     localStorage.setItem("lfc_tray_email", email);
     localStorage.setItem("lfc_tray_org_id", data.user.orgId);
+    localStorage.removeItem("lfc_tray_device_id");
     setState((s) => ({ ...s, loggedIn: true, email, apiUrl }));
     await loadDefaultProfile();
     setPage("onboarding");
@@ -135,14 +207,25 @@ export default function App() {
 
   const handleLogout = async () => {
     if (isTauri) {
-      try { await tauriInvoke("logout"); } catch {}
+      try {
+        await tauriInvoke("logout");
+      } catch {}
     } else {
       localStorage.removeItem("lfc_tray_token");
       localStorage.removeItem("lfc_tray_email");
       localStorage.removeItem("lfc_tray_org_id");
+      localStorage.removeItem("lfc_tray_device_id");
       localStorage.removeItem("lfc_tray_last_sync");
     }
-    setState((s) => ({ ...s, loggedIn: false, email: undefined, syncStatus: "idle", syncError: undefined, installedTools: [], syncedConfigs: 0 }));
+    setState((s) => ({
+      ...s,
+      loggedIn: false,
+      email: undefined,
+      syncStatus: "idle",
+      syncError: undefined,
+      installedTools: [],
+      syncedConfigs: 0,
+    }));
     setToolScans([]);
     setPage("login");
   };
@@ -152,7 +235,12 @@ export default function App() {
 
     if (isTauri) {
       try {
-        await tauriInvoke("sync_now");
+        await tauriInvokeWithTimeout(
+          "sync_now",
+          undefined,
+          30000,
+          "Initial sync timed out. Check that the local server is reachable and retry."
+        );
         await loadStatus();
       } catch (e: any) {
         const msg = typeof e === "string" ? e : e.message || "Sync failed";
@@ -162,26 +250,22 @@ export default function App() {
     }
 
     try {
-      const data = await apiFetch("/api/sync", {
+      const deviceId = await ensureBrowserDevice();
+      const data = await apiFetch(`/api/devices/${deviceId}/sync`, {
         method: "POST",
         body: JSON.stringify({
-          installedTools: ["claude-desktop", "claude-code", "cursor", "codex", "windsurf"],
-          currentVersions: {},
+          detectedTools: [],
+          states: [],
+          inventory: [],
         }),
       });
-      const configs = data.configs || [];
-      const tools = new Set<string>();
-      for (const c of configs) {
-        for (const t of c.targetTools || []) tools.add(t);
-      }
       const now = new Date().toISOString();
       localStorage.setItem("lfc_tray_last_sync", now);
       setState((s) => ({
         ...s,
         syncStatus: "synced",
         lastSync: now,
-        syncedConfigs: configs.length,
-        installedTools: Array.from(tools),
+        syncedConfigs: (data.assignments || []).length,
       }));
     } catch (e: any) {
       setState((s) => ({ ...s, syncStatus: "error", syncError: e.message || "Sync failed" }));
@@ -190,7 +274,14 @@ export default function App() {
 
   const handleSaveSyncInterval = async (syncInterval: number) => {
     if (isTauri) {
-      try { await tauriInvoke("save_settings", { apiUrl: API_URL, syncInterval }); } catch {}
+      try {
+        await tauriInvokeWithTimeout(
+          "save_settings",
+          { apiUrl: API_URL, syncInterval },
+          5000,
+          "Saving tray settings timed out"
+        );
+      } catch {}
     }
     setState((s) => ({ ...s, syncInterval }));
   };
@@ -198,17 +289,28 @@ export default function App() {
   const handleScanTools = async () => {
     let scans: ToolScan[] = [];
     if (isTauri) {
-      scans = await tauriInvoke<ToolScan[]>("scan_tools");
+      scans = await tauriInvokeWithTimeout<ToolScan[]>(
+        "scan_tools",
+        undefined,
+        15000,
+        "Tool detection timed out. Close the tray and try again."
+      );
     }
     setToolScans(scans);
     if (scans.length > 0) {
       try {
         if (isTauri) {
-          await tauriInvoke("upload_snapshot", { tools: scans });
+          await tauriInvokeWithTimeout(
+            "upload_snapshot",
+            { tools: scans },
+            15000,
+            "Inventory upload timed out"
+          );
         } else {
-          await apiFetch("/api/snapshots", {
+          const deviceId = await ensureBrowserDevice();
+          await apiFetch(`/api/devices/${deviceId}/inventory`, {
             method: "POST",
-            body: JSON.stringify({ tools: scans }),
+            body: JSON.stringify({ inventory: scans }),
           });
         }
       } catch (e) {
@@ -217,40 +319,113 @@ export default function App() {
     }
   };
 
-  const buildSuggestionContent = (item: ConfigItem): { configType: string; title: string; content: string } => {
+  const buildSuggestionContent = (
+    toolId: string,
+    item: ConfigItem
+  ): { title: string; capture: Record<string, unknown> } => {
+    const supportedTools =
+      item.supportedTools && item.supportedTools.length > 0 ? item.supportedTools : [toolId];
+    const sourceTool =
+      toolId === "shared" ? supportedTools[0] || "claude-code" : toolId;
+
     if (item.type === "mcp") {
       return {
-        configType: "mcp",
         title: `Add ${item.name} MCP server`,
-        content: JSON.stringify({ servers: [{ name: item.name, command: item.command, args: item.args, env: {}, _managed_by: "lfc" }] }),
+        capture: {
+          kind: "mcp",
+          name: item.name,
+          tool: sourceTool,
+          supportedTools,
+          serverName: item.name,
+          command: item.command,
+          args: item.args,
+          envKeys: [],
+          path: item.path,
+          scope: item.scope,
+          distributionScope: item.distributionScope,
+        },
       };
     }
+
     return {
-      configType: item.type === "skill" ? "skills" : item.type === "agent" ? "agents" : "rules",
       title: `Add ${item.name} ${item.type}`,
-      content: JSON.stringify({ name: item.name, content: item.preview || "" }),
+      capture: {
+        kind: item.type,
+        name: item.name,
+        tool: sourceTool,
+        supportedTools,
+        content: item.preview || "",
+        path: item.path,
+        scope: item.scope,
+        distributionScope: item.distributionScope,
+      },
     };
   };
 
   const handleSuggest = async (toolId: string, item: ConfigItem) => {
     const { orgId } = getStored();
     if (!orgId || !defaultProfileId) return;
-    const { configType, title, content } = buildSuggestionContent(item);
+    const { title, capture } = buildSuggestionContent(toolId, item);
 
     if (isTauri) {
       try {
-        await tauriInvoke("submit_suggestion", { profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` });
+        const content =
+          item.type === "mcp"
+            ? JSON.stringify({
+                servers: [
+                  {
+                    name: item.name,
+                    command: item.command,
+                    args: item.args,
+                    env: {},
+                    _managed_by: "lfc",
+                  },
+                ],
+              })
+            : JSON.stringify({ name: item.name, content: item.preview || "" });
+        const configType =
+          item.type === "mcp"
+            ? "mcp"
+            : item.type === "skill"
+              ? "skills"
+              : item.type === "agent"
+                ? "agents"
+                : "rules";
+        await tauriInvoke("submit_suggestion", {
+          profileId: defaultProfileId,
+          configType,
+          title,
+          content,
+          description: `From ${toolId}`,
+          capture,
+        });
       } catch (e) {
         console.warn("[LFC] Tauri submit_suggestion failed, falling back to API:", e);
-        await apiFetch(`/api/orgs/${orgId}/suggestions`, {
+        await apiFetch(`/api/orgs/${orgId}/submissions`, {
           method: "POST",
-          body: JSON.stringify({ profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` }),
+          body: JSON.stringify({
+            title,
+            description: `From ${toolId}`,
+            capture: {
+              ...capture,
+              tool: toolId,
+              metadata: { profileId: defaultProfileId },
+            },
+          }),
         });
       }
     } else {
-      await apiFetch(`/api/orgs/${orgId}/suggestions`, {
+      await apiFetch(`/api/orgs/${orgId}/submissions`, {
         method: "POST",
-        body: JSON.stringify({ profileId: defaultProfileId, configType, title, content, description: `From ${toolId}` }),
+        body: JSON.stringify({
+          title,
+          description: `From ${toolId}`,
+          capture: {
+            ...capture,
+            tool: toolId,
+            metadata: { profileId: defaultProfileId },
+          },
+        }),
       });
     }
 
@@ -264,7 +439,6 @@ export default function App() {
     }
   };
 
-  // Load default profile on mount if already logged in
   useEffect(() => {
     if (state.loggedIn && !defaultProfileId) {
       loadDefaultProfile();
