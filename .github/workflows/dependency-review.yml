@@ -17,3 +17,8 @@ jobs:
           fetch-depth: 0
 
       - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          # Current Tauri/Wry Linux builds still transitively depend on gtk-rs 0.18/glib < 0.20.
+          # Track removal of this exception once upstream migrates to the patched glib line.
+          allow-ghsas: GHSA-wrw7-89jp-8q8g
+          show-patched-versions: true
