@@ -2,47 +2,41 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
   },
-  "package": {
-    "productName": "LFC",
-    "version": "0.1.4"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": true
-    },
-    "bundle": {
-      "active": true,
-      "identifier": "dev.lfc.tray",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "macOS": {
-        "minimumSystemVersion": "10.15"
-      },
-      "windows": {
-        "wix": {
-          "language": "en-US"
-        }
+  "bundle": {
+    "active": true,
+    "windows": {
+      "wix": {
+        "language": "en-US"
       }
     },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "createUpdaterArtifacts": "v1Compatible"
+  },
+  "productName": "LFC",
+  "mainBinaryName": "LFC",
+  "version": "0.1.4",
+  "identifier": "dev.lfc.tray",
+  "plugins": {
     "updater": {
-      "active": true,
-      "dialog": true,
       "endpoints": [
         "https://github.com/AbregaInc/lfc-dev/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU0RENGMjJEOEU1NUY0RkUKUldUKzlGV09MZkxjVkpVYWlmTVZSWVVDN0NRbW1SVjdLRStwRnJpZkJOMUpuOEVORnEydjAzV20K"
-    },
-    "security": {
-      "csp": null
-    },
+    }
+  },
+  "app": {
     "windows": [
       {
         "title": "LFC - Looking For Config",
@@ -52,10 +46,14 @@
         "minHeight": 500,
         "resizable": true,
         "visible": false,
-        "decorations": true
+        "decorations": true,
+        "useHttpsScheme": true
       }
     ],
-    "systemTray": {
+    "security": {
+      "csp": "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; connect-src ipc: http://ipc.localhost 'self' https://api.lfc.dev https://app.lfc.dev http://localhost:8787 http://localhost:5173 http://tauri.localhost ipc:; img-src 'self' asset: data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com;"
+    },
+    "trayIcon": {
       "iconPath": "icons/tray-icon.png",
       "iconAsTemplate": true,
       "title": "LFC"

@@ -45,7 +45,7 @@ interface AppState {
 const isTauri = !!(window as any).__TAURI__;
 
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const { invoke } = await import("@tauri-apps/api/tauri");
+  const { invoke } = await import("@tauri-apps/api/core");
   return invoke<T>(cmd, args);
 }
 
@@ -86,8 +86,8 @@ function getStored() {
 
 async function apiFetch(path: string, opts: RequestInit = {}) {
   const { token, apiUrl } = getStored();
-  const headers: Record<string, string> = { "Content-Type": "application/json", ...opts.headers as any };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(opts.headers as any) };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${apiUrl}${path}`, { ...opts, headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -108,7 +108,9 @@ export default function App() {
   const [suggestedItems, setSuggestedItems] = useState<Set<string>>(new Set());
   const [defaultProfileId, setDefaultProfileId] = useState<string | null>(null);
 
-  useEffect(() => { loadStatus(); }, []);
+  useEffect(() => {
+    loadStatus();
+  }, []);
 
   const loadStatus = async () => {
     if (isTauri) {
@@ -205,7 +207,9 @@ export default function App() {
 
   const handleLogout = async () => {
     if (isTauri) {
-      try { await tauriInvoke("logout"); } catch {}
+      try {
+        await tauriInvoke("logout");
+      } catch {}
     } else {
       localStorage.removeItem("lfc_tray_token");
       localStorage.removeItem("lfc_tray_email");
@@ -213,7 +217,15 @@ export default function App() {
       localStorage.removeItem("lfc_tray_device_id");
       localStorage.removeItem("lfc_tray_last_sync");
     }
-    setState((s) => ({ ...s, loggedIn: false, email: undefined, syncStatus: "idle", syncError: undefined, installedTools: [], syncedConfigs: 0 }));
+    setState((s) => ({
+      ...s,
+      loggedIn: false,
+      email: undefined,
+      syncStatus: "idle",
+      syncError: undefined,
+      installedTools: [],
+      syncedConfigs: 0,
+    }));
     setToolScans([]);
     setPage("login");
   };
@@ -359,9 +371,26 @@ export default function App() {
       try {
         const content =
           item.type === "mcp"
-            ? JSON.stringify({ servers: [{ name: item.name, command: item.command, args: item.args, env: {}, _managed_by: "lfc" }] })
+            ? JSON.stringify({
+                servers: [
+                  {
+                    name: item.name,
+                    command: item.command,
+                    args: item.args,
+                    env: {},
+                    _managed_by: "lfc",
+                  },
+                ],
+              })
             : JSON.stringify({ name: item.name, content: item.preview || "" });
-        const configType = item.type === "mcp" ? "mcp" : item.type === "skill" ? "skills" : item.type === "agent" ? "agents" : "rules";
+        const configType =
+          item.type === "mcp"
+            ? "mcp"
+            : item.type === "skill"
+              ? "skills"
+              : item.type === "agent"
+                ? "agents"
+                : "rules";
         await tauriInvoke("submit_suggestion", {
           profileId: defaultProfileId,
           configType,
@@ -410,7 +439,6 @@ export default function App() {
     }
   };
 
-  // Load default profile on mount if already logged in
   useEffect(() => {
     if (state.loggedIn && !defaultProfileId) {
       loadDefaultProfile();
