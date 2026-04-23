@@ -4,6 +4,7 @@
 )]
 
 mod commands;
+mod artifact_sync;
 mod state;
 mod sync;
 
