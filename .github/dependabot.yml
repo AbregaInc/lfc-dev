@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      frontend:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      tooling:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "typescript"
+          - "@typescript-eslint/*"
+          - "tsx"
+          - "tsup"
+          - "turbo"
+
+  - package-ecosystem: "cargo"
+    directory: "/apps/tray/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
