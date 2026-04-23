@@ -11,3 +11,4 @@ target/
 .dev.vars
 .DS_Store
 .wrangler/
+*.tsbuildinfo
