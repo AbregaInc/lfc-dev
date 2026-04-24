@@ -13,13 +13,13 @@
     "db:migrate:prod": "wrangler d1 migrations apply lfc-db --remote --env production"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "hono": "^4.12.14",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",
-    "@types/bcryptjs": "^2.4.6",
+    "@types/bcryptjs": "^3.0.0",
     "typescript": "^5.7.3",
     "wrangler": "^4.0.0"
   }
