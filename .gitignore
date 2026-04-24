@@ -2,6 +2,7 @@ node_modules/
 dist/
 .context/
 target/
+apps/tray/src-tauri/gen/
 *.db
 *.db-shm
 *.db-wal
