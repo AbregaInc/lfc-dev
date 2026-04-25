@@ -152,17 +152,51 @@ jobs:
           echo "APPLE_KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           rm -f "$P12_PATH"
 
+      - name: Prepare Tauri updater signing key
+        shell: bash
+        env:
+          RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          RAW_TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          RAW_KEY="${RAW_TAURI_SIGNING_PRIVATE_KEY:-$RAW_TAURI_PRIVATE_KEY}"
+          if [ -z "$RAW_KEY" ]; then
+            echo "Missing TAURI_SIGNING_PRIVATE_KEY or TAURI_PRIVATE_KEY secret"
+            exit 1
+          fi
+
+          KEY="$(
+            printf '%s\n' "$RAW_KEY" \
+              | sed '/^[[:space:]]*$/d' \
+              | awk '
+                  /^untrusted comment:/ { found = 1; next }
+                  /^trusted comment:/ { next }
+                  /^[[:alnum:]\/+=]+$/ { print; exit }
+                  found && /^[[:alnum:]\/+=]+$/ { print; exit }
+                '
+          )"
+          if [ -z "$KEY" ]; then
+            echo "Could not extract Tauri updater signing key"
+            exit 1
+          fi
+
+          KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-$TAURI_KEY_PASSWORD}"
+          echo "::add-mask::$KEY"
+          {
+            echo "TAURI_SIGNING_PRIVATE_KEY=$KEY"
+            echo "TAURI_PRIVATE_KEY=$KEY"
+            echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$KEY_PASSWORD"
+            echo "TAURI_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         timeout-minutes: 45
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Tauri v2 updater signing. Keep the legacy names for compatibility
-          # with any older action-side helper code.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
