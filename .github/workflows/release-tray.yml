@@ -211,6 +211,40 @@ jobs:
           assetNamePattern: '[name]_[arch][ext]'
           args: --target ${{ matrix.target }}
 
+      - name: Staple and replace macOS DMG assets
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          dmg_paths=(src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg)
+          if [ "${#dmg_paths[@]}" -eq 0 ]; then
+            echo "No DMG artifacts found for ${{ matrix.target }}" >&2
+            exit 1
+          fi
+
+          for dmg_path in "${dmg_paths[@]}"; do
+            xcrun stapler staple "$dmg_path"
+            xcrun stapler validate "$dmg_path"
+            spctl -a -t open --context context:primary-signature -vv "$dmg_path"
+
+            case "${{ matrix.target }}" in
+              aarch64-apple-darwin) asset_name="LFC_aarch64.dmg" ;;
+              x86_64-apple-darwin) asset_name="LFC_x64.dmg" ;;
+              *) echo "Unsupported macOS target: ${{ matrix.target }}" >&2; exit 1 ;;
+            esac
+
+            cp "$dmg_path" "$RUNNER_TEMP/$asset_name"
+            gh release upload "$TAG" "$RUNNER_TEMP/$asset_name" \
+              --repo "$REPOSITORY" \
+              --clobber
+          done
+
       - name: Print notarization history on failure
         if: failure() && matrix.platform == 'macos-latest' && env.APPLE_API_KEY_PATH != ''
         shell: bash
