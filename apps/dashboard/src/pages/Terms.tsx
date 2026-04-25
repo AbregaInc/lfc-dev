@@ -35,10 +35,10 @@ export default function Terms() {
       <section>
         <h2>Payment</h2>
         <ul>
-          <li>Free tier is available for up to 5 users with no payment required.</li>
-          <li>Paid plans are billed annually. Prices are listed on our pricing page.</li>
-          <li>We&apos;ll give 30 days notice before any price changes take effect.</li>
-          <li>Refunds are handled on a case-by-case basis within the first 30 days.</li>
+          <li>LFC is currently available without payment while billing is being prepared.</li>
+          <li>Paid plans are not active yet. Planned pricing is shown on our pricing page for transparency.</li>
+          <li>We&apos;ll give 30 days notice before activating billing or making any price changes.</li>
+          <li>Refund terms will be published before paid checkout becomes available.</li>
         </ul>
       </section>
 

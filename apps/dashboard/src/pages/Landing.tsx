@@ -166,9 +166,9 @@ const detectedTools = [
 ];
 
 const plans = [
-  { name: "Free", price: "$0", period: "forever", detail: "Up to 5 users. All features.", cta: "Start free", featured: false },
-  { name: "Team", price: "$25", period: "per user / year", subline: "$2.08/mo per user", detail: "Up to 50 users. Priority support.", cta: "Start team plan", featured: true },
-  { name: "Enterprise", price: "Custom", period: "", detail: "SSO, SCIM, audit export, self-hosted.", cta: "Talk to us", featured: false },
+  { name: "Free", price: "$0", period: "for now", detail: "Use LFC while billing is being prepared.", cta: "Start free", featured: false },
+  { name: "Team", price: "$25", period: "per user / year", subline: "$2.08/mo per user", detail: "Coming soon. Priority support and higher team limits.", cta: "Join waitlist", featured: true },
+  { name: "Enterprise", price: "Custom", period: "", detail: "Coming soon. SSO, SCIM, audit export, self-hosted.", cta: "Join waitlist", featured: false },
 ];
 
 function LinkButton({
@@ -466,7 +466,9 @@ export default function Landing() {
         {/* ── Pricing ── */}
         <section id="pricing" className="mt-20">
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">Pricing</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Free up to 5 users. Annual billing.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            LFC is free while paid plans are being prepared. Pricing shown is planned annual pricing, not active checkout.
+          </p>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
             {plans.map((plan) => (
@@ -488,8 +490,8 @@ export default function Landing() {
                   </div>
                   <p className="mt-3 text-sm text-muted-foreground">{plan.detail}</p>
                   <div className="mt-auto pt-4">
-                    <Link
-                      to="/register"
+                      <Link
+                        to={plan.name === "Free" ? "/register" : `/waitlist/${plan.name.toLowerCase()}`}
                       className={buttonVariants({ variant: plan.featured ? "default" : "outline", className: "w-full" })}
                     >
                       {plan.cta}
