@@ -33,7 +33,7 @@
       "endpoints": [
         "https://github.com/AbregaInc/lfc-dev/releases/latest/download/latest.json"
       ],
-      "pubkey": "ZFc1MGNuVnpkR1ZrSUdOdmJXMWxiblE2SUcxcGJtbHphV2R1SUhCMVlteHBZeUJyWlhrNklEUkVSakl4T0VKQ01rSXlPVGN4TmpZS1VsZFNiV05UYTNKMWVHcDVWRkZ3ZVdrck5pdGpkV1ZqZEdGNldGTmtkaTg1VVZaWFRuVmxVa3AzTUVkbGQzQXphMFJPY0M5c09XMEs="
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRERjIxOEJCMkIyOTcxNjYKUldSbWNTa3J1eGp5VFFweWkrNitjdWVjdGF6WFNkdi85UVZXTnVlUkp3MEdld3Aza0ROcC9sOW0K"
     }
   },
   "app": {
