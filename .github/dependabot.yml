@@ -4,12 +4,17 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
 
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 10
     groups:
       frontend:
@@ -34,4 +39,7 @@ updates:
     directory: "/apps/tray/src-tauri"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 5
