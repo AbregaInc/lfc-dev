@@ -275,6 +275,21 @@ export async function updateMe(data: { name?: string; email?: string; currentPas
   });
 }
 
+export async function joinWaitlist(data: {
+  email: string;
+  name?: string;
+  company?: string;
+  plan: "team" | "enterprise";
+  message?: string;
+  source?: string;
+  website?: string;
+}) {
+  return request<{ ok: boolean; waitlist: { email: string; plan: string } }>("/api/waitlist", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function createOrg(name: string, slug: string) {
   return request<{ org: any }>("/api/orgs", {
     method: "POST",

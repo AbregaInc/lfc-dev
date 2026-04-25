@@ -14,6 +14,7 @@ import auditRoutes from "./routes/audit.js";
 import statusRoutes from "./routes/status.js";
 import deviceRoutes from "./routes/devices.js";
 import setupRoutes from "./routes/setup.js";
+import waitlistRoutes from "./routes/waitlist.js";
 
 const app = new Hono<AppEnv>();
 
@@ -60,5 +61,6 @@ app.route("/api/orgs/:orgId/audit", auditRoutes);
 app.route("/api/orgs/:orgId/status", statusRoutes);
 app.route("/api", deviceRoutes);
 app.route("/api/admin", setupRoutes);
+app.route("/api/waitlist", waitlistRoutes);
 
 export default app;

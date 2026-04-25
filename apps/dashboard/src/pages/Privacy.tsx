@@ -12,6 +12,7 @@ export default function Privacy() {
         <h2>What we collect</h2>
         <ul>
           <li><strong>Account info</strong> — name, email, and hashed password when you register.</li>
+          <li><strong>Waitlist info</strong> — name, email, company, plan interest, and optional notes you submit.</li>
           <li><strong>Organization data</strong> — artifact definitions, profile assignments, and audit logs you create in the dashboard.</li>
           <li><strong>Device metadata</strong> — OS type, detected AI tools, and config health status reported by the tray client.</li>
           <li><strong>Usage data</strong> — page views, feature usage, and error reports to improve the product.</li>

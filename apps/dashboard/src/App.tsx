@@ -16,6 +16,7 @@ import Landing from "./pages/Landing";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import AcceptableUse from "./pages/AcceptableUse";
+import Waitlist from "./pages/Waitlist";
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/acceptable-use" element={<AcceptableUse />} />
+        <Route path="/waitlist/:plan?" element={<Waitlist />} />
         <Route
           path="/app/*"
           element={
