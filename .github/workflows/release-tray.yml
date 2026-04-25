@@ -168,19 +168,12 @@ jobs:
             exit 1
           fi
 
-          KEY="$(
-            printf '%s\n' "$RAW_KEY" \
-              | sed '/^[[:space:]]*$/d' \
-              | awk '
-                  /^untrusted comment:/ { found = 1; next }
-                  /^trusted comment:/ { next }
-                  /^[[:alnum:]\/+=]+$/ { print; exit }
-                  found && /^[[:alnum:]\/+=]+$/ { print; exit }
-                '
-          )"
-          if [ -z "$KEY" ]; then
-            echo "Could not extract Tauri updater signing key"
-            exit 1
+          # Tauri expects a base64-encoded UTF-8 minisign secret key file.
+          # Some existing secrets store the raw multiline file instead.
+          if printf '%s' "$RAW_KEY" | grep -q 'untrusted comment:'; then
+            KEY="$(printf '%s' "$RAW_KEY" | base64 | tr -d '\n')"
+          else
+            KEY="$RAW_KEY"
           fi
 
           KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-$TAURI_KEY_PASSWORD}"
