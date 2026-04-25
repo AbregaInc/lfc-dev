@@ -203,7 +203,9 @@ jobs:
             - macOS Apple Silicon: `.dmg` (aarch64)
             - macOS Intel: `.dmg` (x64)
             - Windows: `.msi`
-          releaseDraft: false
+          # GitHub releases are immutable after publication. Keep the release
+          # mutable while each matrix leg uploads its platform-specific assets.
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           assetNamePattern: '[name]_[arch][ext]'
@@ -231,3 +233,25 @@ jobs:
           if [ -n "${APPLE_KEYCHAIN_PATH:-}" ]; then
             security delete-keychain "$APPLE_KEYCHAIN_PATH" || true
           fi
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Derive release tag
+        id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#tray-v}"
+          echo "tag=${REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release edit "$TAG" --draft=false --latest=false
