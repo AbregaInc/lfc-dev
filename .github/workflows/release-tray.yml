@@ -218,6 +218,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
           REPOSITORY: ${{ github.repository }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
         run: |
           set -euo pipefail
 
@@ -229,6 +232,11 @@ jobs:
           fi
 
           for dmg_path in "${dmg_paths[@]}"; do
+            xcrun notarytool submit "$dmg_path" \
+              --key "$APPLE_API_KEY_PATH" \
+              --key-id "$APPLE_API_KEY" \
+              --issuer "$APPLE_API_ISSUER" \
+              --wait
             xcrun stapler staple "$dmg_path"
             xcrun stapler validate "$dmg_path"
             spctl -a -t open --context context:primary-signature -vv "$dmg_path"
